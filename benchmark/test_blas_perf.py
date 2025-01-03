@@ -14,6 +14,7 @@ class BlasBenchmark(Benchmark):
     benchmark for blas
     """
 
+    # ['latency_base', 'latency', 'speedup', 'tflops']
     DEFAULT_METRICS = DEFAULT_METRICS[:] + ["tflops"]
 
     def __init__(self, *args, input_fn, **kwargs):

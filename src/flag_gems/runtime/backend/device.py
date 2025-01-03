@@ -8,18 +8,35 @@ from ..commom_utils import vendors_map
 
 
 # A singleton class to manage device context.
+# First called in Register::__init__() by `use_gems`
 class DeviceDetector(object):
+    # Singleton class
     _instance = None
 
     def __new__(cls, *args, **kargs):
         if cls._instance is None:
             cls._instance = super(DeviceDetector, cls).__new__(cls)
+        # When other instances are trying to be initialized, return the singleton class.
         return cls._instance
 
     def __init__(self, vendor_name=None):
         if not hasattr(self, "initialized"):
+            # print("[INFO]: Singleton instance of DeviceDetector is initialized")
             self.initialized = True
             # A list of all available vendor names.
+            # 
+            # vendors_map = {
+            #     "nvidia": vendors.NVIDIA,
+            #     "cambricon": vendors.CAMBRICON,
+            #     "iluvatar": vendors.ILUVATAR,
+            #     "kunlunxin": vendors.KUNLUNXIN,
+            #     "mthreads": vendors.MTHREADS,
+            #     "hygon": vendors.HYGON,
+            #     "metax": vendors.METAX,
+            #     "AMD": vendors.AMD,
+            # }
+            #
+            # vendor_list: "nvidia", "cambricon", "iluvatar", "kunlunxin", "mthreads", "hygon", "metax", "AMD"
             self.vendor_list = vendors_map.keys()
 
             # A dataclass instance, get the vendor information based on the provided or default vendor name.
@@ -28,12 +45,14 @@ class DeviceDetector(object):
             # vendor_name is like 'nvidia', device_name is like 'cuda'.
             self.vendor_name = self.info.vendor_name
             self.name = self.info.device_name
+            # For nvidia, the `self.vendor` is `vendors.NVIDIA`.
             self.vendor = vendors_map[self.vendor_name]
             self.device_count = backend.gen_torch_device_object(
                 self.vendor_name
             ).device_count()
 
     def get_vendor(self, vendor_name=None) -> tuple:
+        # print("[INFO]: get vendor of", vendor_name)
         # Try to get the vendor name from a quick special command like 'torch.mlu'.
         vendor_name = self._get_vendor_from_quick_cmd()
         if vendor_name is not None:
@@ -49,6 +68,7 @@ class DeviceDetector(object):
             return self._get_vendor_from_sys()
 
     def _get_vendor_from_quick_cmd(self):
+        """For nvidia, this func returns None."""
         cmd = {
             "cambricon": "mlu",
             "mthreads": "musa",

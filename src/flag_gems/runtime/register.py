@@ -5,6 +5,13 @@ from .backend.device import DeviceDetector
 class Register:
     def __init__(
         self,
+        # see `config`` in src/flag_gems/__init__.py:
+        # (
+        #     ("abs", abs, Autograd.disable),
+        #     ("add.Tensor", add, Autograd.disable),
+        #     ("addmm", addmm, Autograd.disable),
+        #     ...
+        # ),
         config,
         user_unused_ops_list=None,
         lib=None,

@@ -14,6 +14,17 @@ import triton
 from triton import language as tl
 
 
+"""
+This function is used to retrieve the program ID (`program_id`) on the specified
+axis (axis) and convert it to a 64-bit integer (int64).
+
+In Triton, `program_id` usually represents the identifier of a specific thread block
+on the GPU. This is very useful for allocating and managing data in multi-threaded
+and multi-block parallel computing. Through `tl.program_id(axis)`, you can get the
+ID on a certain axis (such as the x, y, or z axis). Then `.to(tl.int64)` casts its
+type to a 64-bit integer for subsequent processing or compatibility with other data
+types.
+"""
 @triton.jit
 def program_id(
     axis: int,
