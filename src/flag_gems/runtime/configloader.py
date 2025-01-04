@@ -13,14 +13,22 @@ class ConfigLoader(object):
         if cls._instance is None:
             cls._instance = super(ConfigLoader, cls).__new__(cls)
         return cls._instance
+        self.yaml_name = yamlname
+    
+    def update_yamlname(self, new_yamlname):
+        self.yaml_name = new_yamlname
+        self.__init__(self.yaml_name)
 
-    def __init__(self):
+    def __init__(self, yamlname=None):
         if not hasattr(self, "initialized"):
             self.initialized = True
             self.device = DeviceDetector()
             # primitive_yaml_config is simply the dictionary returned by yaml
             # and is reserved from being an attr for vendor customizability
-            self.primitive_yaml_config = self.get_vendor_tune_config()
+            if yamlname is None:
+                self.primitive_yaml_config = self.get_vendor_tune_config()
+            else:
+                self.primitive_yaml_config = self.get_vendor_tune_config(yamlname)
             self.heuristics_config = self.get_vendor_heuristics_config()
             # gen_key is an identifier that indicates whether the current config needs to be generated automatically
             self.gen_key = "gen"
@@ -40,8 +48,8 @@ class ConfigLoader(object):
     def get_vendor_heuristics_config(self):
         return backend.get_heuristic_config(self.device.vendor_name)
 
-    def get_vendor_tune_config(self):
-        return backend.get_tune_config(self.device.vendor_name)
+    def get_vendor_tune_config(self, yamlname=None):
+        return backend.get_tune_config(self.device.vendor_name, yamlname)
 
     def _gen_impl(
         self,
@@ -111,6 +119,10 @@ class ConfigLoader(object):
         if op_name in self.loaded_triton_config:
             return self.loaded_triton_config[op_name]
 
+        # 
+        if not op_name in self.primitive_yaml_config:
+            return []
+        
         current_op_configs = self.primitive_yaml_config[op_name]
         configs = []
         if len(current_op_configs) == 0:

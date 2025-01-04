@@ -15,8 +15,7 @@ if __name__ == "__main__":
     
     remove_triton_cache()
     
-    
-    m = n = k = 11199
+    m = n = k = 2048
     
     inp1 = torch.randn([m, k], dtype=torch.float16, device=torch.device("cuda:0"))
     inp2 = torch.randn([k, n], dtype=torch.float16, device=torch.device("cuda:0"))

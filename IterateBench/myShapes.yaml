@@ -1,8 +1,9 @@
 MMBenchmark:
   shapes:
     - [4096, 4096, 4096]
-    # - [384, 384, 384]
-    # - [1024, 1024, 1024]
-    # - [2048, 2048, 2048]
-    # - [4096, 2048, 4096]
+    - [384, 384, 384]
+    - [1024, 1024, 1024]
+    - [2048, 2048, 2048]
+    - [4096, 2048, 4096]
+    
   shape_desc: "M, N, K" # shapes are defined as (M, N, K), torch.mm only accept 2D matrices as inputs

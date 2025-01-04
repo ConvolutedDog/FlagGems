@@ -22,12 +22,15 @@ class VendorInfoBase:
     device_query_cmd: str
 
 
-def get_tune_config(vendor_name, file_mode="r"):
+def get_tune_config(vendor_name, yamlname, file_mode="r"):
     try:
         vendor_name = "_" + vendor_name
         script_path = os.path.abspath(__file__)
         base_dir = os.path.dirname(script_path)
-        file_path = os.path.join(base_dir, vendor_name, "tune_configs.yaml")
+        if yamlname is None:
+            file_path = os.path.join(base_dir, vendor_name, "tune_configs.yaml")
+        else:
+            file_path = os.path.join(base_dir, vendor_name, yamlname)
         with open(file_path, file_mode) as file:
             config = yaml.safe_load(file)
     except FileNotFoundError:

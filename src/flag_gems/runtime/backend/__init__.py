@@ -132,10 +132,10 @@ def get_heuristic_config(vendor_name=None):
     return vendor_module.HEURISTICS_CONFIGS
 
 
-def get_tune_config(vendor_name=None):
+def get_tune_config(vendor_name=None, yamlname=None):
     global vendor_module
     get_vendor_module(vendor_name)
-    return backend_utils.get_tune_config(vendor_name)
+    return backend_utils.get_tune_config(vendor_name, yamlname)
 
 
 __all__ = ["*"]

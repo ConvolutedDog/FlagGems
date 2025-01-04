@@ -252,11 +252,13 @@ class BenchmarkResult:
         else:
             metrics.legacy_shape = None
 
-    def to_json(self) -> str:
+    def to_json(self, read_config_from_yaml=None) -> str:
         import json
 
         # Convert to dict and handle tuple serialization for shape_detail
         result_dict = asdict(self)
+        if read_config_from_yaml is not None:
+            read_config_from_yaml(result_dict)
         return json.dumps(result_dict, default=custom_json_encoder)
 
     def to_dict(self) -> dict:

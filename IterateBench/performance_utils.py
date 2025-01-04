@@ -322,7 +322,7 @@ class Benchmark:
             ]
         return args, kwargs
 
-    def run(self):
+    def run(self, read_config_from_yaml=None):
         if Config.query:
             self.init_default_config()
             attri = OperationAttribute(
@@ -387,7 +387,7 @@ class Benchmark:
                 result=metrics,
             )
             print(result)
-            logging.info(result.to_json())
+            logging.info(result.to_json(read_config_from_yaml))
 
 
 class GenericBenchmark(Benchmark):
@@ -486,3 +486,21 @@ def binary_input_fn(shape, cur_dtype, device):
 
 def unary_input_fn(shape, cur_dtype, device):
     yield generate_tensor_input(shape, cur_dtype, device),
+
+import os
+import shutil
+def remove_triton_cache():
+    cache_dir = os.path.expanduser("~/.triton/cache")
+    if os.path.exists(cache_dir):
+        shutil.rmtree(cache_dir)
+        print(f"Deleted Triton cache directory: {cache_dir}")
+    else:
+        print(f"Triton cache directory does not exist: {cache_dir}")
+
+def get_yaml_path():
+    """This func returns the absolute path of `IterateBench.yaml`, please note that
+    this is not in the source code path, but in the package path of miniconda."""
+    conda_env_path = os.environ['CONDA_PREFIX']
+    relative_path = "lib/python3.12/site-packages/flag_gems/runtime/backend/_nvidia/IterateBench.yaml"
+    YAMLPATH = os.path.join(conda_env_path, relative_path)
+    return YAMLPATH
