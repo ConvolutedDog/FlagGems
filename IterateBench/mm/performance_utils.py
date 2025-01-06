@@ -11,7 +11,13 @@ import ast
 
 import flag_gems
 
-from .attri_util import (
+import os
+import sys
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+from attri_util import (
     BOOL_DTYPES,
     DEFAULT_METRICS,
     DEFAULT_SHAPES,
@@ -23,7 +29,7 @@ from .attri_util import (
     OperationAttribute,
     check_metric_dependencies,
 )
-from .conftest import Config
+from conftest import Config
 
 torch_backend_device = flag_gems.runtime.torch_backend_device
 torch_device_fn = flag_gems.runtime.torch_device_fn
@@ -157,7 +163,6 @@ class Benchmark:
     def set_shapes(self, shape_file_path: Optional[List[Any]] = None):
         # Validate user-spicified shapes files
         import os
-
         if not os.path.isfile(shape_file_path):
             raise FileNotFoundError(f"Shape file '{shape_file_path}' does not exist.")
         try:
@@ -523,9 +528,10 @@ def remove_triton_cache():
         print(f"Triton cache directory does not exist: {cache_dir}")
 
 def get_yaml_path():
-    """This func returns the absolute path of `IterateBench.yaml`, please note that
+    """This func returns the absolute path of `tune_configs.yaml`, please note that
     this is not in the source code path, but in the package path of miniconda."""
-    conda_env_path = os.environ['CONDA_PREFIX']
-    relative_path = "lib/python3.12/site-packages/flag_gems/runtime/backend/_nvidia/IterateBench.yaml"
-    YAMLPATH = os.path.join(conda_env_path, relative_path)
-    return YAMLPATH
+    # conda_env_path = os.environ['CONDA_PREFIX']
+    # relative_path = "lib/python3.12/site-packages/flag_gems/runtime/backend/_nvidia/tune_configs.yaml"
+    # YAMLPATH = os.path.join(conda_env_path, relative_path)
+    # return YAMLPATH
+    return "/home/yangjianchao/Github/FlagGems-IterateBench/src/flag_gems/runtime/backend/_nvidia/tune_configs.yaml"

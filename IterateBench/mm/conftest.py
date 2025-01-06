@@ -5,10 +5,15 @@ import os
 import pytest
 import torch
 
+import sys
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
 import flag_gems
 from flag_gems.runtime import torch_device_fn
 
-from .attri_util import (
+from attri_util import (
     ALL_AVAILABLE_METRICS,
     BOOL_DTYPES,
     DEFAULT_ITER_COUNT,
@@ -154,7 +159,7 @@ def pytest_configure(config):
             arg.replace(".py", "").replace("=", "_").replace("/", "_")
             for arg in config.invocation_params.args
         ]
-
+        
         logging.basicConfig(
             filename="result_{}.log".format("_".join(cmd_args)).replace("_-", "-"),
             filemode="w",

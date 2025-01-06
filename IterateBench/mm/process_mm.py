@@ -3,8 +3,8 @@ import pandas as pd
 import json
 
 # ===================================
-input_log = "result_test_mm_perf--level_core--warmup_1--iter_5--dtypes_float16--shape_file_mm_shape.yaml--record_log.log"
-output_excel = "mm_perf_4090.xlsx"
+input_log = "mm-result.txt"
+output_excel = "mm_perf_H100.xlsx"
 # ===================================
 
 f = open(input_log, 'r')

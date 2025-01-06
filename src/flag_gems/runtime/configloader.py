@@ -1,4 +1,6 @@
 import copy
+import inspect
+import warnings
 
 import triton
 
@@ -15,9 +17,47 @@ class ConfigLoader(object):
         return cls._instance
         self.yaml_name = yamlname
     
-    def update_yamlname(self, new_yamlname):
-        self.yaml_name = new_yamlname
-        self.__init__(self.yaml_name)
+    def update_tuneconfig(self, new_yamlname: str):
+        """Updates the autotune configuration file used by the ConfigLoader
+        instance.  If the new YAML file name is the same as the current one,
+        a warning is triggered.  Otherwise, the current instance is reset,
+        and a new instance is created with the new YAML file.
+
+        Args:
+            new_yamlname (str): The name of the new autotune configuration
+                file to load.
+
+        Returns:
+            ConfigLoader: A new instance of ConfigLoader initialized with the
+                new YAML file.
+
+        Raises:
+            UserWarning: If the new YAML file name is the same as the current
+                one, a warning is issued to indicate that no update is needed.
+
+        Example:
+            To update the configuration file to 'myBench.yaml', use:
+            >>> import flag_gems
+            >>> flag_gems.runtime.config_loader.update_tuneconfig("myBench.yaml")
+        """
+        # if new_yamlname == self.yaml_name:
+        if 0:
+            # Get the caller information and print the warning message
+            caller_frame = inspect.currentframe().f_back
+            caller_info = inspect.getframeinfo(caller_frame)
+            warning_message = (
+                f"Warning: The tune config file '{new_yamlname}' is already loaded. "
+                f"No update is needed. \nCalled from {caller_info.filename}, line {caller_info.lineno}."
+            )
+            # warnings.warn(warning_message, UserWarning)
+            return
+        else:
+            self.yaml_name = new_yamlname
+            # Delete the current instance and create a new one
+            self.__class__._instance = None  # Reset the singleton instance
+            new_instance = self.__class__(new_yamlname)  # Create a new instance
+            # warnings.warn(f"{self.__class__._instance}", UserWarning)
+            return new_instance
 
     def __init__(self, yamlname=None):
         if not hasattr(self, "initialized"):
@@ -25,10 +65,12 @@ class ConfigLoader(object):
             self.device = DeviceDetector()
             # primitive_yaml_config is simply the dictionary returned by yaml
             # and is reserved from being an attr for vendor customizability
+            self.yaml_name = None
             if yamlname is None:
                 self.primitive_yaml_config = self.get_vendor_tune_config()
             else:
                 self.primitive_yaml_config = self.get_vendor_tune_config(yamlname)
+                self.yaml_name = yamlname
             self.heuristics_config = self.get_vendor_heuristics_config()
             # gen_key is an identifier that indicates whether the current config needs to be generated automatically
             self.gen_key = "gen"
@@ -146,4 +188,5 @@ class ConfigLoader(object):
                     num_ctas=current_config["num_ctas"],
                 )
             )
+        # warnings.warn(f"{configs[0].__str__()}", UserWarning)
         return configs
