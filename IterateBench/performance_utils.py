@@ -7,6 +7,7 @@ import pytest
 import torch
 import triton
 import yaml
+import ast
 
 import flag_gems
 
@@ -103,6 +104,8 @@ class Benchmark:
         for k in kwargs:
             if hasattr(self, k):
                 setattr(self, k, kwargs[k])
+        
+        self.previous_torch_op_latency = {}
 
     def set_metrics(self, user_desired_metrics: Optional[List[str]]):
         # Validate user-specified metrics
@@ -345,6 +348,28 @@ class Benchmark:
                     args, kwargs = self.unpack_to_args_kwargs(input)
                     metric.shape_detail = self.record_shapes(*args, **kwargs)
                     if "latency_base" in self.to_bench_metrics:
+                        # shape_dtype_dict = "latency_base" + "_" + self.torch_op.__name__ + "_"
+                        # for item in args:
+                        #     if isinstance(item, torch.Tensor):
+                        #         # print(item.shape)
+                        #         shape_dtype_dict += "_".join(map(str, tuple(item.shape))) + "_"
+                        #         shape_dtype_dict += item.dtype.__str__() + "_"
+                        # dictkey = shape_dtype_dict.strip('"\'')
+                        # if (dictkey in self.previous_torch_op_latency.keys()):
+                        #     metric.latency_base = self.previous_torch_op_latency[dictkey]
+                        #     logging.info("xxxxxxxxxxxx")
+                        # else:
+                        #     metric.latency_base = self.get_latency(
+                        #         self.torch_op, *args, **kwargs
+                        #     )
+                        #     self.previous_torch_op_latency[dictkey] = metric.latency_base
+                        #     logging.info(shape_dtype_dict+"   "+str(metric.latency_base)+"  " )
+                        #     logging.info(self.previous_torch_op_latency.keys())
+                        #     logging.info(dictkey in self.previous_torch_op_latency.keys())
+                        #     logging.info(f"dictkey: {dictkey}, type: {type(dictkey)}")
+                        #     logging.info(f"keys in dict: {self.previous_torch_op_latency.keys()}, types: {[type(key) for key in self.previous_torch_op_latency.keys()]}")
+                        #     logging.info(f"dictkey repr: {repr(dictkey)}")
+                        #     logging.info(f"keys in dict repr: {[repr(key) for key in self.previous_torch_op_latency.keys()]}")
                         metric.latency_base = self.get_latency(
                             self.torch_op, *args, **kwargs
                         )
