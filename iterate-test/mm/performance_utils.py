@@ -1,40 +1,32 @@
 import gc
+import itertools
 import logging
+import os
+import random
+import statistics
+import subprocess
+import sys
 import time
+from datetime import datetime
 from typing import Any, Generator, List, Optional, Tuple
 
 import pytest
 import torch
-import triton
 import yaml
-import ast
- 
-import shutil
-import subprocess
-import random
-import itertools
-from datetime import datetime
 from ruamel.yaml import YAML
 
-import statistics
-
-import os
-import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.abspath(os.path.join(current_dir, '../../src'))
+src_dir = os.path.abspath(os.path.join(current_dir, "../../src"))
 sys.path.append(src_dir)
+
+# flake8: noqa: E402
 import flag_gems
 
-import warnings
-from flag_gems.runtime.configloader import ConfigLoader
-
-import os
-import sys
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "."))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
-
+# flake8: noqa: E402
 from attri_util import (
     BOOL_DTYPES,
     DEFAULT_METRICS,
@@ -55,10 +47,18 @@ device = flag_gems.device
 torch_backend_device.matmul.allow_tf32 = False
 
 
-def triton_testing_do_bench_rewritting(fn, warmup=25, rep=100, grad_to_none=None,
-                                       quantiles=None, fast_flush=True, return_mode="mean",
-                                       device_type="cuda", fixed_warmup_rep_runs=True,
-                                       return_all_times=True):
+def triton_testing_do_bench_rewritting(
+    fn,
+    warmup=25,
+    rep=100,
+    grad_to_none=None,
+    quantiles=None,
+    fast_flush=True,
+    return_mode="mean",
+    device_type="cuda",
+    fixed_warmup_rep_runs=True,
+    return_all_times=True,
+):
     """
     This is a rewritten version of the original `triton.testing.do_bench` function.
 
@@ -131,7 +131,9 @@ def triton_testing_do_bench_rewritting(fn, warmup=25, rep=100, grad_to_none=None
         end_event[i].record()
     # Record clocks
     di.synchronize()
-    times = torch.tensor([s.elapsed_time(e) for s, e in zip(start_event, end_event)], dtype=torch.float)
+    times = torch.tensor(
+        [s.elapsed_time(e) for s, e in zip(start_event, end_event)], dtype=torch.float
+    )
     if quantiles is not None:
         ret = torch.quantile(times, torch.tensor(quantiles, dtype=torch.float)).tolist()
         if len(ret) == 1:
@@ -210,14 +212,14 @@ class Benchmark:
         # can be influenced by user input.
         self.to_bench_dtypes = self.dtypes
         self.to_bench_metrics = self.metrics
-        
+
         self.return_all_times = False
 
         # additional properties
         for k in kwargs:
             if hasattr(self, k):
                 setattr(self, k, kwargs[k])
-        
+
         self.previous_torch_op_latency = {}
 
     def set_metrics(self, user_desired_metrics: Optional[List[str]]):
@@ -270,6 +272,7 @@ class Benchmark:
     def set_shapes(self, shape_file_path: Optional[List[Any]] = None):
         # Validate user-spicified shapes files
         import os
+
         if not os.path.isfile(shape_file_path):
             raise FileNotFoundError(f"Shape file '{shape_file_path}' does not exist.")
         try:
@@ -361,7 +364,9 @@ class Benchmark:
         fn = lambda: op(*args, **kwargs)
         if self.is_backward:
             if self.return_all_times:
-                raise NotImplementedError("Not support return_all_times in `is_backward`")
+                raise NotImplementedError(
+                    "Not support return_all_times in `is_backward`"
+                )
             out = fn()
             dout = torch.randn_like(out)
             fn = lambda: out.backward(dout, retain_graph=True)
@@ -385,7 +390,7 @@ class Benchmark:
                 warmup=Config.warm_up,
                 rep=Config.repetition,
                 return_mode="median",
-                return_all_times=self.return_all_times
+                return_all_times=self.return_all_times,
             )
         # average latency in ms
         return latency
@@ -504,7 +509,9 @@ class Benchmark:
                                 )
                     if "speedup" in self.to_bench_metrics:
                         if self.return_all_times:
-                            metric.speedup = statistics.mean(metric.latency_base) / statistics.mean(metric.latency)
+                            metric.speedup = statistics.mean(
+                                metric.latency_base
+                            ) / statistics.mean(metric.latency)
                         else:
                             metric.speedup = metric.latency_base / metric.latency
                     if "gbps" in self.to_bench_metrics:
@@ -675,12 +682,14 @@ def get_yaml_path():
     """
     This func returns the absolute path of `tune_configs.yaml`, please note that
     this is not in the package path of miniconda, but in the source code path.
-    
+
     Raises:
         FileNotFoundError: If the file does not exist.
     """
 
-    yaml_path = os.path.abspath("../../src/flag_gems/runtime/backend/_nvidia/tune_configs.yaml")
+    yaml_path = os.path.abspath(
+        "../../src/flag_gems/runtime/backend/_nvidia/tune_configs.yaml"
+    )
 
     if not os.path.exists(yaml_path):
         raise FileNotFoundError(f"The file `{yaml_path}` does not exist.")
@@ -688,7 +697,9 @@ def get_yaml_path():
     return yaml_path
 
 
-def generate_triton_config_only_single_config(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas):
+def generate_triton_config_only_single_config(
+    block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
+):
     """
     Generate a Triton configuration string with specific parameters.
 
@@ -705,17 +716,17 @@ def generate_triton_config_only_single_config(block_m, block_n, block_k, split_k
         str: A configuration string that should be written into tune_configs.yaml
     """
 
-#     config = f"""
-# mm:
-# - META:
-#     BLOCK_M: {block_m}
-#     BLOCK_N: {block_n}
-#     BLOCK_K: {block_k}
-#     SPLIT_K: {split_k}
-#   num_stages: {num_stages}
-#   num_warps: {num_warps}
-#   num_ctas: {num_ctas}
-# """
+    #     config = f"""
+    # mm:
+    # - META:
+    #     BLOCK_M: {block_m}
+    #     BLOCK_N: {block_n}
+    #     BLOCK_K: {block_k}
+    #     SPLIT_K: {split_k}
+    #   num_stages: {num_stages}
+    #   num_warps: {num_warps}
+    #   num_ctas: {num_ctas}
+    # """
     config = f"""
 mm:
 - META:
@@ -730,7 +741,9 @@ mm:
     return config
 
 
-def generate_triton_config(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas):
+def generate_triton_config(
+    block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
+):
     """
     Generate a Triton configuration string with specific parameters.
 
@@ -781,8 +794,16 @@ class ParameterIterator:
         reset: Resets the iterator to the first combination.
     """
 
-    def __init__(self, block_m_range, block_n_range, block_k_range, 
-                 split_k_range, num_stages_range, num_warps_range, num_ctas_range):
+    def __init__(
+        self,
+        block_m_range,
+        block_n_range,
+        block_k_range,
+        split_k_range,
+        num_stages_range,
+        num_warps_range,
+        num_ctas_range,
+    ):
         """
         Initialize the ParameterIterator with ranges for each parameter.
 
@@ -813,10 +834,7 @@ class ParameterIterator:
         }
 
         # Initialize the current values for each parameter
-        self.current_indices = {
-            key: 0
-            for key in self.ranges
-        }
+        self.current_indices = {key: 0 for key in self.ranges}
 
         # Compute the full product of all parameter combinations
         self.keys = list(self.ranges.keys())
@@ -871,19 +889,24 @@ class ParameterIterator:
         Reset the iterator to the first combination.
         """
         self.current_combination = 0
-    
+
     def write_next_yaml_only_single_config(self):
         try:
             params = self.get_next_val()
             # params is like {'block_m': 3, 'block_n': 3, 'block_k': 3, 'split_k': 3, 'num_stages': 3, 'num_warps': 3, 'num_ctas': 3}
             block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas = (
-                params['block_m'], params['block_n'], params['block_k'], params['split_k'],
-                params['num_stages'], params['num_warps'], params['num_ctas']
+                params["block_m"],
+                params["block_n"],
+                params["block_k"],
+                params["split_k"],
+                params["num_stages"],
+                params["num_warps"],
+                params["num_ctas"],
             )
             new_config = generate_triton_config_only_single_config(
                 block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
             )
-            with open(get_yaml_path(), 'w') as file:
+            with open(get_yaml_path(), "w") as file:
                 file.write(new_config)
             return True
         except StopIteration as e:
@@ -904,19 +927,26 @@ class ParameterIterator:
             # Get the next parameter combination
             params = self.get_next_val()
             block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas = (
-                params['block_m'], params['block_n'], params['block_k'], params['split_k'],
-                params['num_stages'], params['num_warps'], params['num_ctas']
+                params["block_m"],
+                params["block_n"],
+                params["block_k"],
+                params["split_k"],
+                params["num_stages"],
+                params["num_warps"],
+                params["num_ctas"],
             )
 
             # Generate the new configuration
-            new_config = generate_triton_config(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas)
+            new_config = generate_triton_config(
+                block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
+            )
 
             # Load the YAML file
             yaml = YAML()
             yaml_path = get_yaml_path()
 
             if os.path.exists(yaml_path):
-                with open(yaml_path, 'r') as file:
+                with open(yaml_path, "r") as file:
                     yaml_data = yaml.load(file)
             else:
                 yaml_data = {}
@@ -927,7 +957,7 @@ class ParameterIterator:
             # warnings.warn(f"{yaml_data[entry]}", UserWarning)
 
             # Write the updated YAML data back to the file
-            with open(yaml_path, 'w') as file:
+            with open(yaml_path, "w") as file:
                 yaml.dump(yaml_data, file)
 
             print(f"Updated YAML file with new configuration for entry '{entry}'.")
@@ -937,8 +967,9 @@ class ParameterIterator:
             print(e)
             return False
 
+
 class MMShapeGenerator:
-    def __init__(self, start, end, step, num = 0):
+    def __init__(self, start, end, step, num=0):
         """
         Initializes the MMShapeGenerator with ranges for M, N, and K.
         :param start: Start of the range (inclusive) for M, N, K.
@@ -956,13 +987,13 @@ class MMShapeGenerator:
         :return: A list of [M, N, K] combinations.
         """
         # Create ranges for M, N, K
-        m_range = range(self.start, self.end+1, self.step)
-        n_range = range(self.start, self.end+1, self.step)
-        k_range = range(self.start, self.end+1, self.step)
-        
+        m_range = range(self.start, self.end + 1, self.step)
+        n_range = range(self.start, self.end + 1, self.step)
+        k_range = range(self.start, self.end + 1, self.step)
+
         # Generate the Cartesian product of all combinations for M, N, K.
         shapes = list(itertools.product(m_range, n_range, k_range))
-        
+
         # Convert tuples to lists for output consistency
         shapes = [list(shape) for shape in shapes]
         return shapes
@@ -974,38 +1005,42 @@ class MMShapeGenerator:
         :return: A list of [M, N, K] combinations.
         """
         if self.num is None:
-            raise ValueError("Number of random shapes must be provided for random generation.")
-        
+            raise ValueError(
+                "Number of random shapes must be provided for random generation."
+            )
+
         if exclude_shapes is None:
             exclude_shapes = []
-        
+
         # Convert exclude_shapes to a set of tuples for faster lookup
         exclude_set = set(tuple(shape) for shape in exclude_shapes)
-        
+
         # Generate random shapes
         shapes = []
         while len(shapes) < self.num:
             m = random.randint(self.start, self.end)
             n = random.randint(self.start, self.end)
             k = random.randint(self.start, self.end)
-            
+
             if m % 16 != 0:
                 continue
             if n % 16 != 0:
                 continue
             if k % 16 != 0:
                 continue
-            
+
             shape = (m, n, k)
-            
+
             # Ensure the shape is not in the exclude list
             if shape not in exclude_set:
                 shapes.append(list(shape))
                 exclude_set.add(shape)  # Prevent duplicates
-        
+
         return shapes
 
-    def save_to_yaml(self, filename="configs/mm_shape.yaml", generate_fixed_shapes=True):
+    def save_to_yaml(
+        self, filename="configs/mm_shape.yaml", generate_fixed_shapes=True
+    ):
         """
         Save the generated shapes into a YAML file.
         :param filename: Name of the YAML file to save the shapes.
@@ -1017,20 +1052,248 @@ class MMShapeGenerator:
             exclude_shapes = self.generate_fixed_step_shapes()
             shapes = self.generate_random_shapes(exclude_shapes)
 
-        data = {
-            "MMBenchmark": {
-                "shapes": shapes,
-                "shape_desc": "M, N, K"
-            }
-        }
+        data = {"MMBenchmark": {"shapes": shapes, "shape_desc": "M, N, K"}}
+
         # Customize the Dumper to make sure the list is output in a flat format
         class CustomDumper(yaml.SafeDumper):
             def increase_indent(self, flow=False, indentless=False):
                 return super(CustomDumper, self).increase_indent(flow, False)
-        
+
         # Dump with PyYAML and ensure proper `[a, b, c]` formatting
         with open(filename, "w") as f:
-            yaml.dump(data, f, Dumper=CustomDumper, default_flow_style=None, allow_unicode=True, sort_keys=False, indent=2)
+            yaml.dump(
+                data,
+                f,
+                Dumper=CustomDumper,
+                default_flow_style=None,
+                allow_unicode=True,
+                sort_keys=False,
+                indent=2,
+            )
+
+    _iterated_shapes_static = None
+
+    def iterShapeOneByOne(
+        self, filename="configs/mm_shape.yaml", generate_fixed_shapes=True
+    ):
+        if MMShapeGenerator._iterated_shapes_static is None:
+            if generate_fixed_shapes:
+                shapes = self.generate_fixed_step_shapes()
+            else:
+                exclude_shapes = self.generate_fixed_step_shapes()
+                shapes = self.generate_random_shapes(exclude_shapes)
+            MMShapeGenerator._iterated_shapes_static = shapes
+
+        if MMShapeGenerator._iterated_shapes_static:
+            shape = MMShapeGenerator._iterated_shapes_static.pop(0)
+            shapeM, shapeN, shapeK = shape[0], shape[1], shape[2]
+
+            data = {"MMBenchmark": {"shapes": [shape], "shape_desc": "M, N, K"}}
+
+            # Customize the Dumper to make sure the list is output in a flat format
+            class CustomDumper(yaml.SafeDumper):
+                def increase_indent(self, flow=False, indentless=False):
+                    return super(CustomDumper, self).increase_indent(flow, False)
+
+            # Dump with PyYAML and ensure proper `[a, b, c]` formatting
+            with open(filename, "w") as f:
+                yaml.dump(
+                    data,
+                    f,
+                    Dumper=CustomDumper,
+                    default_flow_style=None,
+                    allow_unicode=True,
+                    sort_keys=False,
+                    indent=2,
+                )
+
+            return True, shapeM, shapeN, shapeK
+        else:
+            print("No shapes left to iterate.")
+            return False, None, None, None
+
+
+class TunedParameterFunctions:
+    """
+    A class to encapsulate the functions used to generate parameters for the ParameterGenerator.
+
+    Attributes:
+        block_m_func (callable): Function to generate block_m.
+        block_k_func (callable): Function to generate block_k.
+        block_n_func (callable): Function to generate block_n.
+        split_k_func (callable): Function to generate split_k.
+        num_stages_func (callable): Function to generate num_stages.
+        num_warps_func (callable): Function to generate num_warps.
+        num_ctas_func (callable): Function to generate num_ctas.
+    """
+
+    def __init__(
+        self,
+        block_m_func: callable,
+        block_k_func: callable,
+        block_n_func: callable,
+        split_k_func: callable,
+        num_stages_func: callable,
+        num_warps_func: callable,
+        num_ctas_func: callable,
+    ):
+        """
+        Initializes the TunedParameterFunctions with the provided functions.
+
+        Args:
+            block_m_func (callable): Function to generate block_m.
+            block_k_func (callable): Function to generate block_k.
+            block_n_func (callable): Function to generate block_n.
+            split_k_func (callable): Function to generate split_k.
+            num_stages_func (callable): Function to generate num_stages.
+            num_warps_func (callable): Function to generate num_warps.
+            num_ctas_func (callable): Function to generate num_ctas.
+        """
+        self.block_m_func = block_m_func
+        self.block_k_func = block_k_func
+        self.block_n_func = block_n_func
+        self.split_k_func = split_k_func
+        self.num_stages_func = num_stages_func
+        self.num_warps_func = num_warps_func
+        self.num_ctas_func = num_ctas_func
+
+
+class TunedParameterGenerator:
+    """
+    A class to generate parameters (`block_m`, `block_k`, `block_n`, `split_k`, `num_stages`,
+    `num_warps`, `num_ctas`) based on input shapes (`shapeM`, `shapeK`, `shapeN`) and additional
+    function parameters.
+
+    This class encapsulates the logic for generating the 6 parameters using 6 function parameters.
+    The generated parameters are used for further computation or optimization.
+
+    Attributes:
+        shapeM (int): The first input shape dimension.
+        shapeK (int): The second input shape dimension.
+        shapeN (int): The third input shape dimension.
+        param_functions (TunedParameterFunctions): An instance of TunedParameterFunctions containing
+                                                   the functions to generate the parameters.
+
+    Methods:
+        __init__: Initializes the TunedParameterGenerator with input shapes and function parameters.
+        generate_parameters: Generates and returns the 6 parameters based on the input shapes and functions.
+        write_to_yaml: Write the generated configuration to the YAML file, replacing the specified entry.
+    """
+
+    def __init__(
+        self,
+        shapeM: int,
+        shapeK: int,
+        shapeN: int,
+        param_functions: TunedParameterFunctions,
+    ):
+        """
+        Initializes the TunedParameterGenerator with input shapes and function parameters.
+
+        Args:
+            shapeM (int): The first input shape dimension.
+            shapeK (int): The second input shape dimension.
+            shapeN (int): The third input shape dimension.
+            param_functions (TunedParameterFunctions): An instance of TunedParameterFunctions containing
+                                                       the functions to generate the parameters.
+        """
+        self.shapeM = shapeM
+        self.shapeK = shapeK
+        self.shapeN = shapeN
+        self.param_functions = param_functions
+        self.block_m_func = self.param_functions.block_m_func
+        self.block_k_func = self.param_functions.block_k_func
+        self.block_n_func = self.param_functions.block_n_func
+        self.split_k_func = self.param_functions.split_k_func
+        self.num_stages_func = self.param_functions.num_stages_func
+        self.num_warps_func = self.param_functions.num_warps_func
+        self.num_ctas_func = self.param_functions.num_ctas_func
+
+    def generate_parameters(self):
+        """
+        Generates and returns the 6 parameters based on the input shapes and functions.
+
+        Returns:
+            dict: A dictionary containing the generated parameters:
+                - block_m (int): Generated block_m value.
+                - block_k (int): Generated block_k value.
+                - block_n (int): Generated block_n value.
+                - split_k (int): Generated split_k value.
+                - num_stages (int): Generated num_stages value.
+                - num_warps (int): Generated num_warps value.
+                - num_ctas (int): Generated num_ctas value.
+        """
+        block_m = self.block_m_func(self.shapeM, self.shapeK, self.shapeN)
+        block_k = self.block_k_func(self.shapeM, self.shapeK, self.shapeN)
+        block_n = self.block_n_func(self.shapeM, self.shapeK, self.shapeN)
+        split_k = self.split_k_func(self.shapeM, self.shapeK, self.shapeN)
+        num_stages = self.num_stages_func(self.shapeM, self.shapeK, self.shapeN)
+        num_warps = self.num_warps_func(self.shapeM, self.shapeK, self.shapeN)
+        num_ctas = self.num_ctas_func(self.shapeM, self.shapeK, self.shapeN)
+
+        return {
+            "block_m": block_m,
+            "block_k": block_k,
+            "block_n": block_n,
+            "split_k": split_k,
+            "num_stages": num_stages,
+            "num_warps": num_warps,
+            "num_ctas": num_ctas,
+        }
+
+    def write_to_yaml(self, entry="mm"):
+        """
+        Write the generated configuration to the YAML file, replacing the specified entry.
+
+        Args:
+            entry (str, optional): The entry in the YAML file to replace. Defaults to "mm".
+
+        Returns:
+            bool: True if the operation was successful, False if all configurations have been iterated over.
+        """
+        try:
+            # Get the next parameter combination
+            params = self.generate_parameters()
+            block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas = (
+                params["block_m"],
+                params["block_n"],
+                params["block_k"],
+                params["split_k"],
+                params["num_stages"],
+                params["num_warps"],
+                params["num_ctas"],
+            )
+
+            # Generate the new configuration
+            new_config = generate_triton_config(
+                block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
+            )
+
+            # Load the YAML file
+            yaml = YAML()
+            yaml_path = get_yaml_path()
+
+            if os.path.exists(yaml_path):
+                with open(yaml_path, "r") as file:
+                    yaml_data = yaml.load(file)
+            else:
+                yaml_data = {}
+
+            # Replace the specified entry with the new configuration
+            yaml_data[entry] = yaml.load(new_config)
+            # import warnings
+            # warnings.warn(f"{yaml_data[entry]}", UserWarning)
+
+            # Write the updated YAML data back to the file
+            with open(yaml_path, "w") as file:
+                yaml.dump(yaml_data, file)
+
+            print(f"Updated YAML file with new configuration for entry '{entry}'.")
+            return True
+
+        except StopIteration as e:
+            print(e)
+            return False
 
 
 def archive_file_with_timestamp(file_path, archive_dir="archive"):
@@ -1040,7 +1303,7 @@ def archive_file_with_timestamp(file_path, archive_dir="archive"):
 
     Args:
         file_path (str): The path of the file to be archived.
-        archive_dir (str, optional): The directory where the archived file will be moved. 
+        archive_dir (str, optional): The directory where the archived file will be moved.
                                      Defaults to "archive".
 
     Returns:
@@ -1079,8 +1342,16 @@ def archive_file_with_timestamp(file_path, archive_dir="archive"):
     return new_file_path
 
 
-def run_perf_pytest(operation, shape_file, level="core", warmup=5, iter=5,
-                    dtypes="float16", log="log", verbose=False):
+def run_perf_pytest(
+    operation,
+    shape_file,
+    level="core",
+    warmup=5,
+    iter=5,
+    dtypes="float16",
+    log="log",
+    verbose=False,
+):
     """
     Run a performance test using pytest with the specified parameters.
 
@@ -1096,23 +1367,38 @@ def run_perf_pytest(operation, shape_file, level="core", warmup=5, iter=5,
     # Construct the command as a list of arguments
     if verbose:
         cmd = [
-            "pytest", "-s", f"test_{operation}_perf.py",
-            "--level", level,
-            "--warmup", str(warmup),
-            "--iter", str(iter),
-            "--dtypes", dtypes,
-            "--shape_file", shape_file,
-            "--record", log,
+            "pytest",
+            "-s",
+            f"test_{operation}_perf.py",
+            "--level",
+            level,
+            "--warmup",
+            str(warmup),
+            "--iter",
+            str(iter),
+            "--dtypes",
+            dtypes,
+            "--shape_file",
+            shape_file,
+            "--record",
+            log,
         ]
     else:
         cmd = [
-            "pytest", f"test_{operation}_perf.py",
-            "--level", level,
-            "--warmup", str(warmup),
-            "--iter", str(iter),
-            "--dtypes", dtypes,
-            "--shape_file", shape_file,
-            "--record", log,
+            "pytest",
+            f"test_{operation}_perf.py",
+            "--level",
+            level,
+            "--warmup",
+            str(warmup),
+            "--iter",
+            str(iter),
+            "--dtypes",
+            dtypes,
+            "--shape_file",
+            shape_file,
+            "--record",
+            log,
         ]
 
     # Run the command
@@ -1122,7 +1408,7 @@ def run_perf_pytest(operation, shape_file, level="core", warmup=5, iter=5,
     else:
         print("Performance test failed.")
 
-    filename="result-{}.log".format("_".join(cmd))
+    filename = "result-{}.log".format("_".join(cmd))
     filename = filename.replace("pytest_-", "").replace(".py_", "")
     filename = filename.replace("_-", "-").replace("/", "_")
     return filename

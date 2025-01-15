@@ -1,23 +1,18 @@
-import itertools
 from typing import Generator
 
+import pycuda.driver as cuda
 import pytest
 import torch
 import yaml
+from attri_util import DEFAULT_METRICS, FLOAT_DTYPES
+from performance_utils import Benchmark, get_yaml_path
 
-import pycuda.driver as cuda
-import pycuda.autoinit
-
-device = cuda.Device(0) # MUST set `export CUDA_VISIBLE_DEVICES=?` !!!!!!
-max_threads_per_block = device.get_attribute(cuda.device_attribute.MAX_THREADS_PER_BLOCK)
+device = cuda.Device(0)  # MUST set `export CUDA_VISIBLE_DEVICES=?`
+max_threads_per_block = device.get_attribute(
+    cuda.device_attribute.MAX_THREADS_PER_BLOCK
+)
 max_warps_per_cta = int(max_threads_per_block / cuda.device_attribute.WARP_SIZE)
 
-from attri_util import DEFAULT_METRICS, FLOAT_DTYPES, BenchLevel, llama_shapes
-from conftest import Config
-from performance_utils import Benchmark
-from performance_utils import remove_triton_cache, get_yaml_path
-
-import flag_gems
 
 """
 Usage:
@@ -55,6 +50,7 @@ Usage:
     Benchmark info recorded in log files or not.
     Optional: "none" or "log"
 """
+
 
 class MMBenchmark(Benchmark):
     """Benchmark for mm."""
@@ -94,10 +90,15 @@ def mm_input_fn(m, n, k, cur_dtype, device):
     inp2 = torch.randn([k, n], dtype=cur_dtype, device=device)
     yield inp1, inp2
 
+
 def read_config_from_yaml(result_dict):
     with open(get_yaml_path(), "r") as f:
         config = yaml.safe_load(f)
-        if "mm" in config and isinstance(config["mm"], list) and "META" in config["mm"][0]:
+        if (
+            "mm" in config
+            and isinstance(config["mm"], list)
+            and "META" in config["mm"][0]
+        ):
             meta = config["mm"][0]["META"]
             # Update result_dict with values from META and other keys
             items_to_add = {
@@ -113,6 +114,7 @@ def read_config_from_yaml(result_dict):
             if autotune_key not in result_dict:
                 result_dict[autotune_key] = items_to_add
 
+
 @pytest.mark.parametrize(
     "op_name, torch_op, input_fn",
     [
@@ -122,12 +124,14 @@ def read_config_from_yaml(result_dict):
             mm_input_fn,
             marks=pytest.mark.mm,
         ),
-
     ],
 )
 def test_mm_benchmark(op_name, torch_op, input_fn):
     bench = MMBenchmark(
-        input_fn=input_fn, op_name=op_name, torch_op=torch_op, dtypes=FLOAT_DTYPES,
-        return_all_times = True # Return all latencies in a list and print to the log
+        input_fn=input_fn,
+        op_name=op_name,
+        torch_op=torch_op,
+        dtypes=FLOAT_DTYPES,
+        return_all_times=True,  # Return all latencies in a list and print to the log
     )
     bench.run(read_config_from_yaml)

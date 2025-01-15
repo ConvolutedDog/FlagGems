@@ -1,18 +1,16 @@
 import json
 import logging
 import os
+import sys
 
 import pytest
 import torch
 
-import sys
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "."))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
-import flag_gems
-from flag_gems.runtime import torch_device_fn
-
+# flake8: noqa: E402
 from attri_util import (
     ALL_AVAILABLE_METRICS,
     BOOL_DTYPES,
@@ -24,6 +22,9 @@ from attri_util import (
     OperationAttribute,
     get_recommended_shapes,
 )
+
+import flag_gems
+from flag_gems.runtime import torch_device_fn
 
 device = flag_gems.device
 

@@ -204,26 +204,33 @@ class BenchmarkResult:
         # legacy_shape_str = (
         #     metrics.legacy_shape if metrics.legacy_shape is not None else "N/A"
         # )
-        
+
         # latency_base_str = (
         #     f"{metrics.latency_base:.6f}" if metrics.latency_base is not None else "N/A"
         # )
         if isinstance(metrics.latency_base, list):
             if len(metrics.latency_base) == 0:
-                latency_base_str = f"N/A"
+                NAvalue = "N/A"
+                latency_base_str = f"{NAvalue}"
             else:
                 latency_base_str = ", ".join(f"{x:.6f}" for x in metrics.latency_base)
         else:
-            latency_base_str = f"{metrics.latency_base:.6f}" if metrics.latency_base is not None else "N/A"
-        
+            latency_base_str = (
+                f"{metrics.latency_base:.6f}"
+                if metrics.latency_base is not None
+                else "N/A"
+            )
+
         # latency_str = f"{metrics.latency:.6f}" if metrics.latency is not None else "N/A"
         if isinstance(metrics.latency, list):
             if len(metrics.latency) == 0:
-                latency_str = f"N/A"
+                latency_str = "N/A"
             else:
                 latency_str = ", ".join(f"{x:.6f}" for x in metrics.latency)
         else:
-            latency_str = f"{metrics.latency:.6f}" if metrics.latency is not None else "N/A"
+            latency_str = (
+                f"{metrics.latency:.6f}" if metrics.latency is not None else "N/A"
+            )
 
         speedup_str = f"{metrics.speedup:.3f}" if metrics.speedup is not None else "N/A"
         torch_gbps_str = (
@@ -282,4 +289,3 @@ class BenchmarkResult:
 
     def to_dict(self) -> dict:
         return self.__dict__
-
