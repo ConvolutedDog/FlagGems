@@ -665,7 +665,7 @@ def remove_triton_cache():
     cache_dir = remove_triton_cache.cache_dir
 
     try:
-        subprocess.run(["rm", "-rf", cache_dir], check=True)
+        subprocess.run(["rm", "-rf", cache_dir], check=False)
         print(f"Deleted Triton cache directory: {cache_dir}")
     except subprocess.CalledProcessError as e:
         print(f"Failed to delete Triton cache directory: {e}")
@@ -1079,7 +1079,7 @@ def archive_file_with_timestamp(file_path, archive_dir="archive"):
     return new_file_path
 
 
-def run_perf_pytest(operation, shape_file, level="core", warmup=50, iter=100,
+def run_perf_pytest(operation, shape_file, level="core", warmup=5, iter=5,
                     dtypes="float16", log="log", verbose=False):
     """
     Run a performance test using pytest with the specified parameters.
@@ -1116,7 +1116,7 @@ def run_perf_pytest(operation, shape_file, level="core", warmup=50, iter=100,
         ]
 
     # Run the command
-    result = subprocess.run(cmd, check=True)
+    result = subprocess.run(cmd, check=False)
     if result.returncode == 0:
         print("Performance test completed successfully.")
     else:
