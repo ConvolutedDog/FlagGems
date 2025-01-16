@@ -4,7 +4,9 @@ import pandas as pd
 
 # ===================================
 input_log = "results/mm-result.txt"
-output_excel = "results/mm-result-eval-model-512-512-8192-4090.xlsx"
+output_excel = (
+    "results/mm-result-eval-model-512-512-8192-vs-rochcompile-nativeflaggems-4090.xlsx"
+)
 # ===================================
 
 f = open(input_log, "r")
@@ -35,6 +37,8 @@ df = pd.DataFrame(
         "accuracy",
         "tflops",
         "utilization",
+        "latency_torch_compile",
+        "latency_native_flaggems",
         "error_msg",
     ]
 )
@@ -79,6 +83,8 @@ for line in lines:
                 "accuracy": result["accuracy"],
                 "tflops": result["tflops"],
                 "utilization": result["utilization"],
+                "latency_torch_compile": result["latency_torch_compile"],
+                "latency_native_flaggems": result["latency_native_flaggems"],
                 "error_msg": result["error_msg"],
             }
 

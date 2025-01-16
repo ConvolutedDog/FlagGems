@@ -1,9 +1,12 @@
 import itertools
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+
+# from typing import Callable
+
 
 FLOAT_DTYPES = [torch.float16, torch.float32, torch.bfloat16]
 INT_DTYPES = [torch.int16, torch.int32]
@@ -75,6 +78,10 @@ class BenchmarkMetrics:
     error_msg: Optional[str] = None
     # All Latencies in a list
     all_latencies: Optional[list] = None
+    # latency_torch_compile
+    latency_torch_compile: Optional[float] = None
+    # latency_native_flaggems
+    latency_native_flaggems: Optional[float] = None
 
 
 # {'latency', 'latency_base', 'gbps_base', 'utilization', 'tflops', 'accuracy', 'error_msg', 'speedup', 'gbps'}
@@ -278,13 +285,25 @@ class BenchmarkResult:
         else:
             metrics.legacy_shape = None
 
-    def to_json(self, read_config_from_yaml=None) -> str:
+    # def to_json(
+    #     self, read_config_from_yaml: Callable[[Dict[str, Any]], None] = None
+    # ) -> str:
+    #     import json
+
+    #     # Convert to dict and handle tuple serialization for shape_detail
+    #     result_dict = asdict(self)
+    #     if read_config_from_yaml is not None:
+    #         read_config_from_yaml(result_dict)
+    #     return json.dumps(result_dict, default=custom_json_encoder)
+
+    def to_json(self, ourTunedConfigs: Dict[str, Any] = None) -> str:
         import json
 
         # Convert to dict and handle tuple serialization for shape_detail
         result_dict = asdict(self)
-        if read_config_from_yaml is not None:
-            read_config_from_yaml(result_dict)
+        autotune_key = "autotune_configs"
+        if autotune_key not in result_dict:
+            result_dict[autotune_key] = ourTunedConfigs[autotune_key]
         return json.dumps(result_dict, default=custom_json_encoder)
 
     def to_dict(self) -> dict:

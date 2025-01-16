@@ -1,5 +1,6 @@
 from typing import Generator
 
+import pycuda.autoinit  # noqa: F401
 import pycuda.driver as cuda
 import pytest
 import torch
@@ -57,6 +58,9 @@ class MMBenchmark(Benchmark):
 
     # ['latency_base', 'latency', 'speedup', 'tflops']
     DEFAULT_METRICS = DEFAULT_METRICS[:] + ["tflops"] + ["legacy_shape"]
+    # ['latency_base', 'latency', 'speedup', 'tflops', 'latency_torch_compile', 'latency_native_flaggems']
+    DEFAULT_METRICS = DEFAULT_METRICS[:] + ["latency_torch_compile"]
+    DEFAULT_METRICS = DEFAULT_METRICS[:] + ["latency_native_flaggems"]
 
     def __init__(self, *args, input_fn, **kwargs):
         super().__init__(*args, **kwargs)

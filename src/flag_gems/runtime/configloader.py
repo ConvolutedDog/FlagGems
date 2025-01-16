@@ -135,3 +135,15 @@ class ConfigLoader(object):
                 )
             )
         return configs
+
+    @classmethod
+    def reset_instance(cls):
+        """
+        Reset the singleton instance by deleting the current instance and creating a new one.
+        """
+        if cls._instance is not None:
+            # Clean up resources if needed
+            cls._instance = None
+        # Create a new instance
+        cls._instance = cls()
+        return cls._instance

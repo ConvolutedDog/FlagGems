@@ -1,4 +1,5 @@
 import gc
+import importlib
 import itertools
 import logging
 import os
@@ -142,6 +143,85 @@ def triton_testing_do_bench_rewritting(
     if return_all_times:
         return times.tolist()
     return getattr(torch, return_mode)(times).item()
+
+
+def remove_triton_cache():
+    """
+    Remove the Triton cache directory located at `~/.triton/cache`.
+
+    This function checks if the cache directory exists. If it exists, the directory
+    and its contents are deleted. If it does not exist, a message is printed to
+    indicate that the directory is not found.
+    """
+
+    # Check if the cache_dir is already calculated and stored as a function attribute
+    if not hasattr(remove_triton_cache, "cache_dir"):
+        # Calculate and store the cache_dir path as a function attribute
+        remove_triton_cache.cache_dir = os.path.expanduser("~/.triton/cache")
+
+    cache_dir = remove_triton_cache.cache_dir
+
+    try:
+        subprocess.run(["rm", "-rf", cache_dir], check=False)
+        print(f"Deleted Triton cache directory: {cache_dir}")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to delete Triton cache directory: {e}")
+
+
+class NativeFlagGemsParameterIterator:
+    @classmethod
+    def _load_yaml(cls, nativeYAML="native.yaml"):
+        """
+        Load and parse the YAML file.
+
+        Args:
+            nativeYAML (str): Path to the YAML file. Defaults to "native.yaml".
+
+        Returns:
+            dict: Parsed YAML content as a dictionary.
+        """
+        with open(nativeYAML, "r") as file:
+            return yaml.safe_load(file)
+
+    @classmethod
+    def write_to_yaml(cls, nativeYAML="native.yaml", entry="mm"):
+        """
+        Write the configuration of the specified entry to the output YAML file.
+
+        Args:
+            nativeYAML (str): Path to the input YAML file. Defaults to "native.yaml".
+            entry (str): The entry to extract and write. Defaults to "mm".
+
+        Raises:
+            ValueError: If the specified entry is not found in the input YAML file.
+        """
+        # Load the input YAML file
+        config = cls._load_yaml(nativeYAML)
+
+        if entry not in config:
+            raise ValueError(f"Entry '{entry}' not found in the '{nativeYAML}' file.")
+
+        entry_config = config[entry]
+
+        # Initialize YAML parser
+        yaml = YAML()
+        yaml_path = get_yaml_path()
+
+        # Load existing YAML data or initialize an empty dictionary
+        if os.path.exists(yaml_path):
+            with open(yaml_path, "r") as file:
+                yaml_data = yaml.load(file)
+        else:
+            yaml_data = {}
+
+        # Replace or add the specified entry with the new configuration
+        yaml_data[entry] = entry_config
+
+        # Write the updated YAML data back to the file
+        with open(yaml_path, "w") as file:
+            yaml.dump(yaml_data, file)
+
+        print(f"Configuration for '{entry}' has been written to {yaml_path}")
 
 
 class Benchmark:
@@ -466,6 +546,7 @@ class Benchmark:
         # )
         for dtype in self.to_bench_dtypes:
             metrics = []
+            res_read_config_from_yaml = {}
             for input in self.get_input_iter(dtype):
                 metric = BenchmarkMetrics()
                 try:
@@ -507,6 +588,7 @@ class Benchmark:
                                 metric.latency = self.get_latency(
                                     self.torch_op, *args, **kwargs
                                 )
+                        read_config_from_yaml(res_read_config_from_yaml)
                     if "speedup" in self.to_bench_metrics:
                         if self.return_all_times:
                             metric.speedup = statistics.mean(
@@ -540,6 +622,29 @@ class Benchmark:
                                 * 1e3
                             )
                             # utilization = metric.tflops / metric.latency / 1e12 * 1e3
+                    if "latency_torch_compile" in self.to_bench_metrics:
+                        metric.latency_torch_compile = self.get_latency(
+                            torch.compile(self.torch_op), *args, **kwargs
+                        )
+                    if "latency_native_flaggems" in self.to_bench_metrics:
+                        remove_triton_cache()
+                        # BUG: Here, the written configs has not impact, cause the config has been
+                        # loaded when the pytest started.
+                        NativeFlagGemsParameterIterator.write_to_yaml()
+                        # must have written the original yaml to config files and also remove the cache.
+                        flag_gems.runtime.config_loader = (
+                            flag_gems.runtime.ConfigLoader.reset_instance()
+                        )
+                        importlib.reload(sys.modules["flag_gems.ops.mm"])
+                        if self.gems_op:
+                            metric.latency_native_flaggems = self.get_latency(
+                                self.gems_op, *args, **kwargs
+                            )
+                        else:
+                            with flag_gems.use_gems():
+                                metric.latency_native_flaggems = self.get_latency(
+                                    self.torch_op, *args, **kwargs
+                                )
                 except Exception as e:
                     metric.error_msg = str(e)
                     pytest.fail(str(e))  # raise exception again
@@ -554,7 +659,7 @@ class Benchmark:
                 result=metrics,
             )
             print(result)
-            logging.info(result.to_json(read_config_from_yaml))
+            logging.info(result.to_json(res_read_config_from_yaml))
 
 
 class GenericBenchmark(Benchmark):
@@ -653,29 +758,6 @@ def binary_input_fn(shape, cur_dtype, device):
 
 def unary_input_fn(shape, cur_dtype, device):
     yield generate_tensor_input(shape, cur_dtype, device),
-
-
-def remove_triton_cache():
-    """
-    Remove the Triton cache directory located at `~/.triton/cache`.
-
-    This function checks if the cache directory exists. If it exists, the directory
-    and its contents are deleted. If it does not exist, a message is printed to
-    indicate that the directory is not found.
-    """
-
-    # Check if the cache_dir is already calculated and stored as a function attribute
-    if not hasattr(remove_triton_cache, "cache_dir"):
-        # Calculate and store the cache_dir path as a function attribute
-        remove_triton_cache.cache_dir = os.path.expanduser("~/.triton/cache")
-
-    cache_dir = remove_triton_cache.cache_dir
-
-    try:
-        subprocess.run(["rm", "-rf", cache_dir], check=False)
-        print(f"Deleted Triton cache directory: {cache_dir}")
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to delete Triton cache directory: {e}")
 
 
 def get_yaml_path():
