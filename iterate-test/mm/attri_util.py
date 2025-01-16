@@ -80,8 +80,12 @@ class BenchmarkMetrics:
     all_latencies: Optional[list] = None
     # latency_torch_compile
     latency_torch_compile: Optional[float] = None
+    # speedup_vs_torch_compile
+    speedup_vs_torch_compile: Optional[float] = None
     # latency_native_flaggems
     latency_native_flaggems: Optional[float] = None
+    # speedup_vs_native_flaggems
+    speedup_vs_native_flaggems: Optional[float] = None
 
 
 # {'latency', 'latency_base', 'gbps_base', 'utilization', 'tflops', 'accuracy', 'error_msg', 'speedup', 'gbps'}

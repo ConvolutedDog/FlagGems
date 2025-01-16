@@ -17,10 +17,12 @@ archive_file_with_timestamp(result_file)
 
 
 # FIXED
-# generator = MMShapeGenerator(start=512, end=8192, step=512)
+generator = MMShapeGenerator(start=4096, end=8192, step=512)
+generate_fixed_shapes = True
 
 # RANDOM
-generator = MMShapeGenerator(start=512, end=8192, step=512, num=32)
+# generator = MMShapeGenerator(start=512, end=8192, step=512, num=32)
+# generate_fixed_shapes = False
 
 
 # Define functions to generate parameters
@@ -109,7 +111,7 @@ tunedParamFunctions = TunedParameterFunctions(
 )
 
 iterShape = generator.iterShapeOneByOne(
-    filename="configs/mm_shape.yaml", generate_fixed_shapes=False
+    filename="configs/mm_shape.yaml", generate_fixed_shapes=generate_fixed_shapes
 )
 
 while iterShape[0]:
@@ -129,5 +131,5 @@ while iterShape[0]:
     subprocess.run("cat " + output_file + " >> " + result_file, shell=True, check=False)
 
     iterShape = generator.iterShapeOneByOne(
-        filename="configs/mm_shape.yaml", generate_fixed_shapes=False
+        filename="configs/mm_shape.yaml", generate_fixed_shapes=generate_fixed_shapes
     )

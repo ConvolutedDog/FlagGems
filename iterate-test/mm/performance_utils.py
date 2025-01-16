@@ -645,6 +645,24 @@ class Benchmark:
                                 metric.latency_native_flaggems = self.get_latency(
                                     self.torch_op, *args, **kwargs
                                 )
+                    if "speedup_vs_torch_compile" in self.to_bench_metrics:
+                        if self.return_all_times:
+                            metric.speedup_vs_torch_compile = statistics.mean(
+                                metric.latency_torch_compile
+                            ) / statistics.mean(metric.latency)
+                        else:
+                            metric.speedup_vs_torch_compile = (
+                                metric.latency_torch_compile / metric.latency
+                            )
+                    if "speedup_vs_native_flaggems" in self.to_bench_metrics:
+                        if self.return_all_times:
+                            metric.speedup_vs_native_flaggems = statistics.mean(
+                                metric.latency_native_flaggems
+                            ) / statistics.mean(metric.latency)
+                        else:
+                            metric.speedup_vs_native_flaggems = (
+                                metric.latency_native_flaggems / metric.latency
+                            )
                 except Exception as e:
                     metric.error_msg = str(e)
                     pytest.fail(str(e))  # raise exception again
@@ -1167,7 +1185,9 @@ class MMShapeGenerator:
             MMShapeGenerator._iterated_shapes_static = shapes
 
         if MMShapeGenerator._iterated_shapes_static:
-            shape = MMShapeGenerator._iterated_shapes_static.pop(0)
+            # shape = MMShapeGenerator._iterated_shapes_static.pop(0)
+            index = random.randrange(len(MMShapeGenerator._iterated_shapes_static))
+            shape = MMShapeGenerator._iterated_shapes_static.pop(index)
             shapeM, shapeN, shapeK = shape[0], shape[1], shape[2]
 
             data = {"MMBenchmark": {"shapes": [shape], "shape_desc": "M, N, K"}}
