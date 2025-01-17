@@ -1,4 +1,6 @@
+import ast
 import gc
+import glob
 import importlib
 import itertools
 import logging
@@ -11,6 +13,7 @@ import time
 from datetime import datetime
 from typing import Any, Generator, List, Optional, Tuple
 
+import pandas as pd
 import pytest
 import torch
 import yaml
@@ -46,6 +49,111 @@ torch_backend_device = flag_gems.runtime.torch_backend_device
 torch_device_fn = flag_gems.runtime.torch_device_fn
 device = flag_gems.device
 torch_backend_device.matmul.allow_tf32 = False
+
+
+# Format: {(dtype, M, K, N): optimal latency}
+optimal_latency_of_native_flaggems = {}
+# Format: [(dtype, M, K, N, blk_m, ...)]
+have_itered_shape_config_pairs = []
+
+
+def read_native_flaggems_from_trainset(tarinSetPath="./train-set", datatype="float16"):
+    xlsx_files = glob.glob(os.path.join(tarinSetPath, "*.xlsx"))
+    if (
+        len(optimal_latency_of_native_flaggems) == 0
+        or len(have_itered_shape_config_pairs) == 0
+    ) and (not len(xlsx_files) == 0):
+        # Read all train sets in `tarinSetPath`, the train sets are all of *.xlsx.
+        # Assume the data read from all of *.xlsx files to be datas, where data is
+        # from one excel. The key of `optimal_latency_of_native_flaggems` seems like
+        # (data["shape_detail_M"], data["shape_detail_K"], data["shape_detail_N"]),
+        # and there are much than one (about 288) rows that has the same above key,
+        # we need select the row who has the most optimal latency.
+        for xlsxpath in xlsx_files:
+            all_sheets = pd.read_excel(xlsxpath, sheet_name=None)
+            for sheet_name, data in all_sheets.items():
+                for index, row in data.iterrows():
+                    dtype = row["dtype"]
+                    if datatype in dtype:
+                        BLOCK_M = int(row["BLOCK_M"])
+                        BLOCK_N = int(row["BLOCK_N"])
+                        BLOCK_K = int(row["BLOCK_K"])
+                        SPLIT_K = int(row["SPLIT_K"])
+                        num_stages = int(row["num_stages"])
+                        num_warps = int(row["num_warps"])
+                        shape_detail_M = int(row["shape_detail_M"])
+                        shape_detail_K = int(row["shape_detail_K"])
+                        shape_detail_N = int(row["shape_detail_N"])
+                        latency = row["latency"]
+
+                        continue_flag = False
+
+                        if (
+                            isinstance(latency, str)
+                            and latency.startswith("[")
+                            and latency.endswith("]")
+                        ):
+                            try:
+                                latency_list = ast.literal_eval(latency)
+                                if isinstance(latency_list, list):
+                                    latency = statistics.mean(latency_list)
+                                else:
+                                    continue_flag = True
+                            except:
+                                continue_flag = True
+                        else:
+                            try:
+                                latency = float(latency)
+                            except ValueError:
+                                continue_flag = True
+
+                        localkey = (
+                            dtype,
+                            shape_detail_M,
+                            shape_detail_K,
+                            shape_detail_N,
+                        )
+                        have_itered_shape_config_pairs.append(
+                            (
+                                dtype,
+                                shape_detail_M,
+                                shape_detail_K,
+                                shape_detail_N,
+                                BLOCK_M,
+                                BLOCK_N,
+                                BLOCK_K,
+                                SPLIT_K,
+                                num_stages,
+                                num_warps,
+                            )
+                        )
+
+                        if not continue_flag:
+                            localkey = (
+                                dtype,
+                                shape_detail_M,
+                                shape_detail_K,
+                                shape_detail_N,
+                            )
+                            if (
+                                not localkey
+                                in optimal_latency_of_native_flaggems.keys()
+                            ):
+                                optimal_latency_of_native_flaggems[localkey] = latency
+                            else:
+                                if (
+                                    latency
+                                    > optimal_latency_of_native_flaggems[localkey]
+                                ):
+                                    optimal_latency_of_native_flaggems[
+                                        localkey
+                                    ] = latency
+                        else:
+                            continue
+                    else:
+                        continue
+    else:
+        pass
 
 
 def triton_testing_do_bench_rewritting(
@@ -663,6 +771,34 @@ class Benchmark:
                             metric.speedup_vs_native_flaggems = (
                                 metric.latency_native_flaggems / metric.latency
                             )
+                    if "speedup_vs_native_flaggems_trainset" in self.to_bench_metrics:
+                        # TODO: Here I will add read from trainset function called
+                        # read_optimal_latency_of_native_flaggems_from_trainset
+                        read_native_flaggems_from_trainset(datatype=str(dtype))
+
+                        # # Format: {(dtype, M, K, N): optimal latency}
+                        # optimal_latency_of_native_flaggems = {}
+                        # # Format: [(dtype, M, K, N, blk_m, ...)]
+                        # have_itered_shape_config_pairs = []
+                        autotune_key = "autotune_configs"
+                        print(metric.shape_detail)
+                        # [torch.Size([4096, 4608]), torch.Size([4608, 7168])]
+                        shapeM = metric.shape_detail[0][0]
+                        shapeK = metric.shape_detail[0][1]
+                        shapeN = metric.shape_detail[1][1]
+
+                        localkey = (str(dtype), int(shapeM), int(shapeK), int(shapeN))
+                        if localkey in optimal_latency_of_native_flaggems.keys():
+                            latencybase = optimal_latency_of_native_flaggems[localkey]
+
+                            if self.return_all_times:
+                                metric.speedup_vs_native_flaggems_trainset = (
+                                    statistics.mean(latencybase) / metric.latency
+                                )
+                            else:
+                                metric.speedup_vs_native_flaggems_trainset = (
+                                    latencybase / metric.latency
+                                )
                 except Exception as e:
                     metric.error_msg = str(e)
                     pytest.fail(str(e))  # raise exception again

@@ -40,6 +40,7 @@ df = pd.DataFrame(
         "speedup_vs_torch_compile",
         "latency_native_flaggems",
         "speedup_vs_native_flaggems",
+        "speedup_vs_native_flaggems_trainset",
         "error_msg",
     ]
 )
@@ -88,6 +89,9 @@ for line in lines:
                 "speedup_vs_torch_compile": result["speedup_vs_torch_compile"],
                 "latency_native_flaggems": result["latency_native_flaggems"],
                 "speedup_vs_native_flaggems": result["speedup_vs_native_flaggems"],
+                "speedup_vs_native_flaggems_trainset": result[
+                    "speedup_vs_native_flaggems_trainset"
+                ],
                 "error_msg": result["error_msg"],
             }
 

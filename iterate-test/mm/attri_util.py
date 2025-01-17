@@ -86,6 +86,8 @@ class BenchmarkMetrics:
     latency_native_flaggems: Optional[float] = None
     # speedup_vs_native_flaggems
     speedup_vs_native_flaggems: Optional[float] = None
+    # speedup_vs_native_flaggems_trainset
+    speedup_vs_native_flaggems_trainset: Optional[float] = None
 
 
 # {'latency', 'latency_base', 'gbps_base', 'utilization', 'tflops', 'accuracy', 'error_msg', 'speedup', 'gbps'}

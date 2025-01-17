@@ -59,10 +59,13 @@ class MMBenchmark(Benchmark):
     # ['latency_base', 'latency', 'speedup', 'tflops']
     DEFAULT_METRICS = DEFAULT_METRICS[:] + ["tflops"] + ["legacy_shape"]
     # ['latency_base', 'latency', 'speedup', 'tflops', 'latency_torch_compile', 'latency_native_flaggems']
-    DEFAULT_METRICS = DEFAULT_METRICS[:] + ["latency_torch_compile"]
-    DEFAULT_METRICS = DEFAULT_METRICS[:] + ["latency_native_flaggems"]
-    DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_torch_compile"]
-    DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_native_flaggems"]
+    # TODO: for eval, please open this 4 metrices.
+    # DEFAULT_METRICS = DEFAULT_METRICS[:] + ["latency_torch_compile"]
+    # DEFAULT_METRICS = DEFAULT_METRICS[:] + ["latency_native_flaggems"]
+    # DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_torch_compile"]
+    # DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_native_flaggems"]
+    # TODO: fix this, this has to read excel each time, maybe give up this func.
+    # DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_native_flaggems_trainset"]
 
     def __init__(self, *args, input_fn, **kwargs):
         super().__init__(*args, **kwargs)
