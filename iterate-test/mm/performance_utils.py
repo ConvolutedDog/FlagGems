@@ -9,7 +9,9 @@ import random
 import statistics
 import subprocess
 import sys
+import textwrap
 import time
+import warnings
 from datetime import datetime
 from typing import Any, Generator, List, Optional, Tuple
 
@@ -51,40 +53,67 @@ device = flag_gems.device
 torch_backend_device.matmul.allow_tf32 = False
 
 
-# Format: {(dtype, M, K, N): optimal latency}
+# Example Format of mm op: {(dtype, M, K, N): optimal latency}
 optimal_latency_of_native_flaggems = {}
-# Format: [(dtype, M, K, N, blk_m, ...)]
+# Example Format of mm op: [(dtype, M, K, N, blk_m, ...)]
 have_itered_shape_config_pairs = []
+# Store the local key for this test.
+localkey_during_this_test = None
+# Store the data type of this test.
+data_type = None
 
 
-def read_native_flaggems_from_trainset(tarinSetPath="./train-set", datatype="float16"):
+def read_native_flaggems_from_trainset(
+    tarinSetPath="./train-set",
+    datatype="float16",
+    config=None,
+):
+    global optimal_latency_of_native_flaggems
+    global have_itered_shape_config_pairs
+    global localkey_during_this_test
+    global data_type
+
+    if config is None:
+        config = {
+            "dtype_col": "dtype",
+            "shape_cols": ["shape_detail_M", "shape_detail_K", "shape_detail_N"],
+            "config_cols": [
+                "BLOCK_M",
+                "BLOCK_N",
+                "BLOCK_K",
+                "SPLIT_K",
+                "num_stages",
+                "num_warps",
+            ],
+            "latency_col": "latency",
+        }
+
+        warning_message = textwrap.dedent(
+            f"""
+            `config` in `read_native_flaggems_from_trainset` has not been specified.
+            Using default `config` for matrix multiplication (mm) operation instead:
+            {config}
+        """
+        ).strip()
+        warnings.warn(warning_message, UserWarning)
+
     xlsx_files = glob.glob(os.path.join(tarinSetPath, "*.xlsx"))
+
     if (
         len(optimal_latency_of_native_flaggems) == 0
         or len(have_itered_shape_config_pairs) == 0
+        or localkey_during_this_test is None
+        or data_type is None
     ) and (not len(xlsx_files) == 0):
-        # Read all train sets in `tarinSetPath`, the train sets are all of *.xlsx.
-        # Assume the data read from all of *.xlsx files to be datas, where data is
-        # from one excel. The key of `optimal_latency_of_native_flaggems` seems like
-        # (data["shape_detail_M"], data["shape_detail_K"], data["shape_detail_N"]),
-        # and there are much than one (about 288) rows that has the same above key,
-        # we need select the row who has the most optimal latency.
         for xlsxpath in xlsx_files:
             all_sheets = pd.read_excel(xlsxpath, sheet_name=None)
             for sheet_name, data in all_sheets.items():
                 for index, row in data.iterrows():
-                    dtype = row["dtype"]
+                    dtype = row[config["dtype_col"]]
                     if datatype in dtype:
-                        BLOCK_M = int(row["BLOCK_M"])
-                        BLOCK_N = int(row["BLOCK_N"])
-                        BLOCK_K = int(row["BLOCK_K"])
-                        SPLIT_K = int(row["SPLIT_K"])
-                        num_stages = int(row["num_stages"])
-                        num_warps = int(row["num_warps"])
-                        shape_detail_M = int(row["shape_detail_M"])
-                        shape_detail_K = int(row["shape_detail_K"])
-                        shape_detail_N = int(row["shape_detail_N"])
-                        latency = row["latency"]
+                        shape_cols = [int(row[col]) for col in config["shape_cols"]]
+                        config_cols = [int(row[col]) for col in config["config_cols"]]
+                        latency = row[config["latency_col"]]
 
                         continue_flag = False
 
@@ -107,53 +136,26 @@ def read_native_flaggems_from_trainset(tarinSetPath="./train-set", datatype="flo
                             except ValueError:
                                 continue_flag = True
 
-                        localkey = (
-                            dtype,
-                            shape_detail_M,
-                            shape_detail_K,
-                            shape_detail_N,
-                        )
+                        localkey = tuple([dtype] + shape_cols)
+                        localkey_during_this_test = localkey
+
+                        data_type = dtype
+
                         have_itered_shape_config_pairs.append(
-                            (
-                                dtype,
-                                shape_detail_M,
-                                shape_detail_K,
-                                shape_detail_N,
-                                BLOCK_M,
-                                BLOCK_N,
-                                BLOCK_K,
-                                SPLIT_K,
-                                num_stages,
-                                num_warps,
-                            )
+                            tuple([dtype] + shape_cols + config_cols)
                         )
 
                         if not continue_flag:
-                            localkey = (
-                                dtype,
-                                shape_detail_M,
-                                shape_detail_K,
-                                shape_detail_N,
-                            )
-                            if (
-                                not localkey
-                                in optimal_latency_of_native_flaggems.keys()
-                            ):
+                            if localkey not in optimal_latency_of_native_flaggems:
                                 optimal_latency_of_native_flaggems[localkey] = latency
                             else:
                                 if (
                                     latency
-                                    > optimal_latency_of_native_flaggems[localkey]
+                                    < optimal_latency_of_native_flaggems[localkey]
                                 ):
                                     optimal_latency_of_native_flaggems[
                                         localkey
                                     ] = latency
-                        else:
-                            continue
-                    else:
-                        continue
-    else:
-        pass
 
 
 def triton_testing_do_bench_rewritting(
@@ -261,6 +263,13 @@ def remove_triton_cache():
     and its contents are deleted. If it does not exist, a message is printed to
     indicate that the directory is not found.
     """
+    raise RuntimeError(
+        "`remove_triton_cache` is deprecated and will be removed in a future version. "
+        "This is because we have found that Triton's cache only stores the compilation "
+        "information of the operation, and does not store the configuration of the "
+        "optimal latency of each shape. So continuing to use this function will only "
+        "increase the cost of testing.",
+    )
 
     # Check if the cache_dir is already calculated and stored as a function attribute
     if not hasattr(remove_triton_cache, "cache_dir"):
@@ -276,40 +285,428 @@ def remove_triton_cache():
         print(f"Failed to delete Triton cache directory: {e}")
 
 
-class NativeFlagGemsParameterIterator:
+def read_config_from_yaml(op_name):
+    """
+    Read the configuration for the specified `op_name` from the YAML file and return it as a dictionary.
+
+    Args:
+        op_name (str): The operation name (e.g., "mm", "bmm") to read from the YAML file.
+
+    Returns:
+        dict: A dictionary containing the configuration for the specified `op_name`.
+    """
+    return RuntimeFlagGemsConfigReader.read_config_from_yaml(op_name)
+
+
+def generate_config_from_dict(config_dict):
+    """
+    Generate a YAML configuration string from a dictionary, using the structure of the original YAML file.
+
+    Args:
+        config_dict (dict): A dictionary containing the configuration fields.
+
+    Returns:
+        str: A YAML-formatted string representing the configuration.
+    """
+    return RuntimeFlagGemsConfigReader.generate_config_from_dict(config_dict)
+
+
+def write_config_to_yaml(config_dict):
+    """
+    Write the updated configuration back to the YAML file. So that users can build their
+    own `config_dict` and the format of `config_dict` can gotten using `read_config_from_yaml`.
+
+    Args:
+        config_dict (dict): A dictionary containing the configuration fields to update.
+    """
+    return RuntimeFlagGemsConfigReader.write_config_to_yaml(config_dict)
+
+
+def write_shapes_to_yaml(shapes, excel_config, output_path="configs/shape.yaml"):
+    """
+    Write the provided shapes to a YAML file using a template-based structure. This function
+    is a wrapper around `ShapeYAMLWriter.write_shapes_to_yaml`, providing a simplified interface
+    for writing shape configurations to a YAML file.
+
+    Args:
+        shapes (list of dict): A list of shape dictionaries, each containing keys
+                               defined in `excel_config["shape_cols"]`.
+        excel_config (dict): A dictionary containing configuration details, including
+                             `bench_name`, `shape_cols`, and `shape_desc`.
+        output_path (str): The path to the output YAML file. Defaults to "shapes.yaml".
+    """
+    return ShapeYAMLWriter.write_shapes_to_yaml(shapes, excel_config, output_path)
+
+
+class ShapeYAMLWriter:
+    """
+    A class to write shape configurations to a YAML file using a template-based approach.
+    The YAML file structure is dynamically generated based on the provided template and input data.
+    All methods are classmethods to avoid the need for instantiation.
+    """
+
     @classmethod
-    def _load_yaml(cls, nativeYAML="native.yaml"):
+    def write_shapes_to_yaml(
+        cls, shapes, excel_config, output_path="configs/shape.yaml"
+    ):
         """
-        Load and parse the YAML file.
+        Write the provided shapes to a YAML file using a template-based structure.
+
+        Args:
+            shapes (list of dict): A list of shape dictionaries, each containing keys
+                                   defined in `excel_config["shape_cols"]`.
+            excel_config (dict): A dictionary containing configuration details, including
+                                 `bench_name`, `shape_cols`, and `shape_desc`.
+            output_path (str): The path to the output YAML file. Defaults to "shapes.yaml".
+
+        Returns:
+            None
+        """
+        # Extract benchmark name from excel_config
+        bench_name = excel_config.get("bench_name", None)
+        if bench_name is None:
+            raise ValueError("`bench_name` must be provided in `excel_config`.")
+
+        # Extract shape columns from excel_config
+        shape_cols = excel_config.get("shape_cols", [])
+        if not shape_cols:
+            raise ValueError("`shape_cols` must be provided in `excel_config`.")
+
+        # Prepare the YAML structure based on the template
+        yaml_data = {
+            bench_name: {
+                "shapes": [
+                    [
+                        shape[col] for col in shape_cols
+                    ]  # Dynamically extract shape values
+                    for shape in shapes
+                ]
+            }
+        }
+
+        # Add shape_desc if provided in excel_config
+        shape_desc = excel_config.get("shape_desc", None)
+        if shape_desc is None:
+            raise ValueError("`shape_desc` must be provided in `excel_config`.")
+
+        yaml_data[bench_name]["shape_desc"] = ", ".join(shape_desc)
+
+        # Write the YAML data to the file
+        with open(output_path, "w") as file:
+            yaml.dump(yaml_data, file, default_flow_style=None)
+
+        print(f"Shapes have been written to {output_path}.")
+
+
+class RuntimeFlagGemsConfigReader:
+    """
+    Read the configuration for the specified `op_name` from the runtime changed YAML file
+    and return it as a dictionary. This returned dict can be as a key in Excel files.
+    """
+
+    # The cache of the config format.
+    _cache_config_format = None
+    _cache_op_name = None
+
+    @classmethod
+    def read_config_from_yaml(cls, op_name):
+        """
+        Read the configuration for the specified `op_name` from the YAML file and return
+        it as a flattened dictionary. Filters out non-numeric values in `param_map`,
+        selects the first value for list-type fields, and removes all prefixes from key
+        names (e.g., "META.TILE_M" becomes "TILE_M").
+
+        Args:
+            op_name (str): The operation name (e.g., "mm", "bmm", "attention") to read
+                           from the YAML file.
+
+        Returns:
+            dict: A flattened dictionary containing all configuration fields for the
+                  specified `op_name`. For list-type fields, only the first value is
+                  selected, and key names are simplified.
+
+        Raises:
+            ValueError: If the YAML file does not contain the specified `op_name` or has
+                        an invalid structure.
+        """
+        yaml_path = cls._get_yaml_path()
+        print(yaml_path)
+
+        with open(yaml_path, "r") as f:
+            config = yaml.safe_load(f)
+
+            # Check if the specified `op_name` exists in the YAML file
+            if op_name not in config:
+                raise ValueError(
+                    f"Operation '{op_name}' not found in the YAML file: {yaml_path}"
+                )
+
+            # Get the list of configurations for the specified `op_name`
+            op_configs = config[op_name]
+            if not isinstance(op_configs, list) or len(op_configs) == 0:
+                raise ValueError(
+                    f"Invalid structure for operation '{op_name}' in the YAML file: {yaml_path}"
+                )
+
+            # Extract the first configuration
+            first_config = op_configs[0]
+
+            # Cache the config format
+            if cls._cache_config_format is None:
+                cls._cache_config_format = first_config
+                cls._cache_op_name = op_name
+
+            # Flatten the configuration into a dictionary, filtering non-numeric values in `param_map`
+            result_dict = cls._flatten_config(first_config)
+            result_dict = {"autotune_configs": result_dict}
+            return result_dict
+
+    @classmethod
+    def generate_config_from_dict(cls, config_dict):
+        """
+        Generate a YAML configuration string from a dictionary, using the structure of the original YAML file.
+
+        Args:
+            config_dict (dict): A dictionary containing the configuration fields.
+
+        Returns:
+            str: A YAML-formatted string representing the configuration.
+        """
+        if cls._cache_config_format is None:
+            raise ValueError(
+                "No cached config format found. Call `read_config_from_yaml` first."
+            )
+
+        # Update the configuration with the provided dictionary
+        updated_config = cls._update_config(cls._cache_config_format, config_dict)
+
+        # Convert the updated configuration to a YAML string
+        yaml = YAML()
+        yaml.preserve_quotes = True  # Preserve quotes in the original YAML file
+
+        from io import StringIO
+
+        string_stream = StringIO()
+        yaml.dump({cls._cache_op_name: [updated_config]}, string_stream)
+        yaml_config = string_stream.getvalue()
+
+        return yaml_config
+
+    @classmethod
+    def write_config_to_yaml(cls, config_dict):
+        """
+        Write the updated configuration back to the YAML file.
+
+        Args:
+            config_dict (dict): A dictionary containing the configuration fields to update.
+
+        Returns:
+            None
+        """
+        if cls._cache_config_format is None:
+            raise ValueError(
+                "No cached config format found. Call `read_config_from_yaml` first."
+            )
+
+        # Update the configuration with the provided dictionary
+        updated_config = cls._update_config(cls._cache_config_format, config_dict)
+
+        # Initialize YAML parser
+        yaml = YAML()
+        yaml.preserve_quotes = True  # Preserve quotes in the original YAML file
+        yaml_path = cls._get_yaml_path()
+
+        # Load existing YAML data or initialize an empty dictionary
+        if os.path.exists(yaml_path):
+            with open(yaml_path, "r") as file:
+                yaml_data = yaml.load(file)
+        else:
+            yaml_data = {}
+
+        # Replace or add the specified entry with the new configuration
+        yaml_data[cls._cache_op_name] = [updated_config]
+
+        # Write the updated YAML data back to the file
+        with open(yaml_path, "w") as file:
+            yaml.dump(yaml_data, file)
+
+        print(
+            f"Updated Configuration for '{cls._cache_op_name}' has been written to {yaml_path}"
+        )
+
+    @classmethod
+    def _update_config(cls, config, config_dict):
+        """
+        Update a configuration dictionary with values from another dictionary.
+
+        Args:
+            config (dict): The original configuration dictionary.
+            config_dict (dict): A dictionary containing the new values.
+
+        Returns:
+            dict: The updated configuration dictionary.
+        """
+        for key, value in config_dict.items():
+            if key in config:
+                config[key] = value
+            elif isinstance(config, dict):
+                for sub_key, sub_value in config.items():
+                    if isinstance(sub_value, dict):
+                        cls._update_config(sub_value, config_dict)
+        return config
+
+    @classmethod
+    def _flatten_config(cls, config, parent_key="", sep="."):
+        """
+        Flatten a nested dictionary into a single-level dictionary.
+        Filters out non-numeric values in `param_map`, selects the first value for list-type
+        fields, and removes all prefixes from key names.
+
+        Args:
+            config (dict): The nested dictionary to flatten.
+            parent_key (str): The base key for nested keys (used internally for recursion).
+            sep (str): The separator used to join nested keys.
+
+        Returns:
+            dict: A flattened dictionary with simplified key names.
+        """
+        items = {}
+        for key, value in config.items():
+            new_key = f"{parent_key}{sep}{key}" if parent_key else key
+            if isinstance(value, dict):
+                # Recursively flatten nested dictionaries
+                if key == "param_map":
+                    # Recursively filter out non-numeric values in `param_map`
+                    filtered_param_map = cls._filter_numeric_values(value)
+                    items.update(filtered_param_map)
+                else:
+                    items.update(cls._flatten_config(value, new_key, sep=sep))
+            elif isinstance(value, list) and len(value) > 0:
+                # For list-type fields, select the first value
+                final_key = new_key.split(sep)[-1]  # Remove all prefixes
+                items[final_key] = value[0]
+            else:
+                # Add the key-value pair to the result, removing all prefixes
+                final_key = new_key.split(sep)[-1]  # Remove all prefixes
+                items[final_key] = value
+        return items
+
+    @classmethod
+    def _filter_numeric_values(cls, config):
+        """
+        Recursively filter out non-numeric values in a dictionary.
+
+        Args:
+            config (dict): The dictionary to filter.
+
+        Returns:
+            dict: A dictionary containing only numeric values.
+        """
+        result = {}
+        for key, value in config.items():
+            if isinstance(value, dict):
+                # Recursively filter nested dictionaries
+                nested_result = cls._filter_numeric_values(value)
+                if nested_result:
+                    result.update(nested_result)
+            elif isinstance(value, (int, float)):
+                # Keep numeric values
+                result[key] = value
+        return result
+
+    @classmethod
+    def _get_yaml_path(cls):
+        """
+        Get the path to the YAML file.
+
+        Returns:
+            str: The path to the YAML file.
+        """
+        return get_yaml_path()
+
+
+class NativeFlagGemsConfigSaver:
+    """
+    This class load and parse the native YAML file, and Write the configuration of the
+    automatically detected entry to the output YAML file. The output YAML path can be
+    got from `get_yaml_path()`.
+
+    In fact, this class intends to restore the default config of native FlagGems, if we
+    want to test the performance of native FlagGems. The `nativeYAML` is actually the
+    copy of the original config of native FlagGems for each operation.
+    """
+
+    # Class property, which is used to cache YAML data.
+    _yaml_cache = None
+    _yaml_file_path = None
+    _yaml_entry = None
+
+    @classmethod
+    def _load_yaml(cls, nativeYAML):
+        """
+        Load and parse the YAML file, or return cached data if available.
+        Automatically detects the entry in the YAML file and ensures there is only one.
 
         Args:
             nativeYAML (str): Path to the YAML file. Defaults to "native.yaml".
 
         Returns:
             dict: Parsed YAML content as a dictionary.
+
+        Raises:
+            ValueError: If the YAML file contains zero or more than one entry.
         """
-        with open(nativeYAML, "r") as file:
-            return yaml.safe_load(file)
+        if (
+            cls._yaml_cache is None
+            or cls._yaml_entry is None
+            or cls._yaml_file_path != nativeYAML
+        ):
+            with open(nativeYAML, "r") as file:
+                cls._yaml_cache = yaml.safe_load(file)
+                cls._yaml_file_path = nativeYAML
+
+            # Auto-detect the identical entry of nativeYAML
+            entries = list(cls._yaml_cache.keys())
+            if len(entries) == 0:
+                raise ValueError(f"No entry found in the YAML file: {nativeYAML}")
+            elif len(entries) > 1:
+                raise ValueError(
+                    f"Multiple entries found in the YAML file: {entries}. "
+                    "Only one entry is allowed."
+                )
+            else:
+                cls._yaml_entry = entries[0]
 
     @classmethod
-    def write_to_yaml(cls, nativeYAML="native.yaml", entry="mm"):
+    def refresh_cache(cls):
         """
-        Write the configuration of the specified entry to the output YAML file.
+        Refresh the cached YAML data by reloading it from the file.
+        """
+        cls._yaml_cache = None
+        cls._yaml_entry = None
+        if cls._yaml_file_path:
+            cls._load_yaml(cls._yaml_file_path)
+
+    @classmethod
+    def write_to_yaml(cls, nativeYAML="native.yaml"):
+        """
+        Write the configuration of the automatically detected entry to the output YAML file.
 
         Args:
             nativeYAML (str): Path to the input YAML file. Defaults to "native.yaml".
-            entry (str): The entry to extract and write. Defaults to "mm".
 
         Raises:
-            ValueError: If the specified entry is not found in the input YAML file.
+            ValueError: If the YAML file contains zero or more than one entry.
         """
         # Load the input YAML file
-        config = cls._load_yaml(nativeYAML)
+        cls._load_yaml(nativeYAML)
 
-        if entry not in config:
-            raise ValueError(f"Entry '{entry}' not found in the '{nativeYAML}' file.")
+        if cls._yaml_entry not in cls._yaml_cache:
+            raise ValueError(
+                f"Entry '{cls._yaml_entry}' not found in the '{nativeYAML}' file."
+            )
 
-        entry_config = config[entry]
+        entry_config = cls._yaml_cache[cls._yaml_entry]
 
         # Initialize YAML parser
         yaml = YAML()
@@ -323,13 +720,15 @@ class NativeFlagGemsParameterIterator:
             yaml_data = {}
 
         # Replace or add the specified entry with the new configuration
-        yaml_data[entry] = entry_config
+        yaml_data[cls._yaml_entry] = entry_config
 
         # Write the updated YAML data back to the file
         with open(yaml_path, "w") as file:
             yaml.dump(yaml_data, file)
 
-        print(f"Configuration for '{entry}' has been written to {yaml_path}")
+        print(
+            f"Native Configuration for '{cls._yaml_entry}' has been written to {yaml_path}"
+        )
 
 
 class Benchmark:
@@ -637,7 +1036,7 @@ class Benchmark:
             ]
         return args, kwargs
 
-    def run(self, read_config_from_yaml=None):
+    def run(self):
         if Config.query:
             self.init_default_config()
             attri = OperationAttribute(
@@ -654,7 +1053,7 @@ class Benchmark:
         # )
         for dtype in self.to_bench_dtypes:
             metrics = []
-            res_read_config_from_yaml = {}
+            res_read_config_from_yaml = None
             for input in self.get_input_iter(dtype):
                 metric = BenchmarkMetrics()
                 try:
@@ -696,7 +1095,7 @@ class Benchmark:
                                 metric.latency = self.get_latency(
                                     self.torch_op, *args, **kwargs
                                 )
-                        read_config_from_yaml(res_read_config_from_yaml)
+                        res_read_config_from_yaml = read_config_from_yaml(self.op_name)
                     if "speedup" in self.to_bench_metrics:
                         if self.return_all_times:
                             metric.speedup = statistics.mean(
@@ -732,14 +1131,24 @@ class Benchmark:
                             # utilization = metric.tflops / metric.latency / 1e12 * 1e3
                     if "latency_torch_compile" in self.to_bench_metrics:
                         metric.latency_torch_compile = self.get_latency(
-                            torch.compile(self.torch_op), *args, **kwargs
+                            torch.compile(
+                                self.torch_op,
+                                mode="max-autotune",
+                                dynamic=False,
+                                fullgraph=False,
+                                backend="inductor",
+                            ),
+                            *args,
+                            **kwargs,
                         )
                     if "latency_native_flaggems" in self.to_bench_metrics:
-                        remove_triton_cache()
-                        # BUG: Here, the written configs has not impact, cause the config has been
+                        # remove_triton_cache()
+                        # Here, the written configs has not impact, cause the config has been
                         # loaded when the pytest started.
-                        NativeFlagGemsParameterIterator.write_to_yaml()
-                        # must have written the original yaml to config files and also remove the cache.
+                        NativeFlagGemsConfigSaver.write_to_yaml()
+                        # So, here we have written the original yaml to config files and next
+                        # we also need to reset the `config_loader` instance and reload the
+                        # operations that we will test.
                         flag_gems.runtime.config_loader = (
                             flag_gems.runtime.ConfigLoader.reset_instance()
                         )
@@ -772,22 +1181,20 @@ class Benchmark:
                                 metric.latency_native_flaggems / metric.latency
                             )
                     if "speedup_vs_native_flaggems_trainset" in self.to_bench_metrics:
-                        # TODO: Here I will add read from trainset function called
-                        # read_optimal_latency_of_native_flaggems_from_trainset
-                        read_native_flaggems_from_trainset(datatype=str(dtype))
+                        # TODO: Here I have wanted to add the function which read the latency
+                        # of native_flaggems from the trainset, but it has some issues, one
+                        # of them is that maybe the latency from the trainset was gotten for
+                        # the warmup and repeats runs being not equal to the other runtime
+                        # tests, such as our method, torch, torch.compile. So, this should be
+                        # ascertained whether it is feasible.
+                        # read_native_flaggems_from_trainset(datatype=str(dtype))
 
-                        # # Format: {(dtype, M, K, N): optimal latency}
+                        # Example Format of mm op: {(dtype, M, K, N): optimal latency}
                         # optimal_latency_of_native_flaggems = {}
-                        # # Format: [(dtype, M, K, N, blk_m, ...)]
+                        # Example Format of mm op: [(dtype, M, K, N, blk_m, ...)]
                         # have_itered_shape_config_pairs = []
-                        autotune_key = "autotune_configs"
-                        print(metric.shape_detail)
-                        # [torch.Size([4096, 4608]), torch.Size([4608, 7168])]
-                        shapeM = metric.shape_detail[0][0]
-                        shapeK = metric.shape_detail[0][1]
-                        shapeN = metric.shape_detail[1][1]
 
-                        localkey = (str(dtype), int(shapeM), int(shapeK), int(shapeN))
+                        localkey = localkey_during_this_test
                         if localkey in optimal_latency_of_native_flaggems.keys():
                             latencybase = optimal_latency_of_native_flaggems[localkey]
 
@@ -914,624 +1321,34 @@ def unary_input_fn(shape, cur_dtype, device):
     yield generate_tensor_input(shape, cur_dtype, device),
 
 
-def get_yaml_path():
+def get_yaml_path(default_yaml_path=None):
     """
     This func returns the absolute path of `tune_configs.yaml`, please note that
     this is not in the package path of miniconda, but in the source code path.
+
+    Args:
+        default_yaml_path (object or str, optional): An object with a `yaml_path`
+            attribute or a string representing the path. Defaults to None.
+
+    Returns:
+        str: The absolute path to `tune_configs.yaml`.
 
     Raises:
         FileNotFoundError: If the file does not exist.
     """
 
-    yaml_path = os.path.abspath(
-        "../../src/flag_gems/runtime/backend/_nvidia/tune_configs.yaml"
-    )
+    # TODO: fix this using more generic configuration.
+    if default_yaml_path is None:
+        yaml_path = os.path.abspath(
+            "../../src/flag_gems/runtime/backend/_nvidia/tune_configs.yaml"
+        )
+    else:
+        yaml_path = default_yaml_path
 
     if not os.path.exists(yaml_path):
         raise FileNotFoundError(f"The file `{yaml_path}` does not exist.")
 
     return yaml_path
-
-
-def generate_triton_config_only_single_config(
-    block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
-):
-    """
-    Generate a Triton configuration string with specific parameters.
-
-    Args:
-        block_m (int): Block M size.
-        block_n (int): Block N size.
-        block_k (int): Block K size.
-        split_k (int): Split K factor.
-        num_stages (int): Number of pipeline stages.
-        num_warps (int): Number of warps.
-        num_ctas (int): Number of cooperative thread arrays.
-
-    Returns:
-        str: A configuration string that should be written into tune_configs.yaml
-    """
-
-    #     config = f"""
-    # mm:
-    # - META:
-    #     BLOCK_M: {block_m}
-    #     BLOCK_N: {block_n}
-    #     BLOCK_K: {block_k}
-    #     SPLIT_K: {split_k}
-    #   num_stages: {num_stages}
-    #   num_warps: {num_warps}
-    #   num_ctas: {num_ctas}
-    # """
-    config = f"""
-mm:
-- META:
-    BLOCK_M: {block_m}
-    BLOCK_N: {block_n}
-    BLOCK_K: {block_k}
-    SPLIT_K: {split_k}
-  num_stages: {num_stages}
-  num_warps: {num_warps}
-"""
-
-    return config
-
-
-def generate_triton_config(
-    block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
-):
-    """
-    Generate a Triton configuration string with specific parameters.
-
-    Args:
-        block_m (int): Block M size.
-        block_n (int): Block N size.
-        block_k (int): Block K size.
-        split_k (int): Split K factor.
-        num_stages (int): Number of pipeline stages.
-        num_warps (int): Number of warps.
-        num_ctas (int): Number of cooperative thread arrays.
-
-    Returns:
-        str: A configuration string that should be written into tune_configs.yaml
-    """
-    config = f"""
-- META:
-    BLOCK_M: {block_m}
-    BLOCK_N: {block_n}
-    BLOCK_K: {block_k}
-    SPLIT_K: {split_k}
-  num_stages: {num_stages}
-  num_warps: {num_warps}
-"""
-
-    return config
-
-
-class ParameterIterator:
-    """
-    A class to iterate over all combinations of parameter values within specified ranges.
-
-    This class is designed to generate and iterate through all possible combinations of
-    parameter values based on the provided ranges. Each parameter can have its own range
-    defined as a tuple or list, and the class supports both regular ranges and ranges
-    restricted to powers of 2.
-
-    Attributes:
-        ranges (dict): A dictionary storing the range for each parameter.
-        current_indices (dict): A dictionary storing the current index for each parameter.
-        keys (list): A list of parameter names.
-        total_combinations (int): The total number of combinations of parameter values.
-        current_combination (int): The current combination index being iterated over.
-
-    Methods:
-        __init__: Initializes the ParameterIterator with ranges for each parameter.
-        get_next_val: Returns the next combination of parameter values.
-        reset: Resets the iterator to the first combination.
-    """
-
-    def __init__(
-        self,
-        block_m_range,
-        block_n_range,
-        block_k_range,
-        split_k_range,
-        num_stages_range,
-        num_warps_range,
-        num_ctas_range,
-    ):
-        """
-        Initialize the ParameterIterator with ranges for each parameter.
-
-        Args:
-            block_m_range: Range for the `block_m` parameter.
-            block_n_range: Range for the `block_n` parameter.
-            block_k_range: Range for the `block_k` parameter.
-            split_k_range: Range for the `split_k` parameter.
-            num_stages_range: Range for the `num_stages` parameter.
-            num_warps_range: Range for the `num_warps` parameter.
-            num_ctas_range: Range for the `num_ctas` parameter.
-
-        Each range should be defined as a tuple or list:
-        - If the range has 3 elements: (start_val, end_val, step).
-        - If the range has 4 elements: (start_val, end_val, step, bool_power_of_2).
-          - If `bool_power_of_2` is True, the range will only include powers of 2.
-        """
-        # Define the ranges for each parameter, this should be defined as a tuple
-        # or a list, like (start_val, end_val, step, bool_power_of_2).
-        self.ranges = {
-            "block_m": block_m_range,
-            "block_n": block_n_range,
-            "block_k": block_k_range,
-            "split_k": split_k_range,
-            "num_stages": num_stages_range,
-            "num_warps": num_warps_range,
-            "num_ctas": num_ctas_range,
-        }
-
-        # Initialize the current values for each parameter
-        self.current_indices = {key: 0 for key in self.ranges}
-
-        # Compute the full product of all parameter combinations
-        self.keys = list(self.ranges.keys())
-        self.total_combinations = 1
-        for key in self.keys:
-            if len(self.ranges[key]) == 3:
-                start, end, step = self.ranges[key]
-                self.ranges[key] = list(range(start, end + 1, step))
-            elif len(self.ranges[key]) == 4:
-                start, end, step, bool_power_of_2 = self.ranges[key]
-                if not bool_power_of_2:
-                    self.ranges[key] = list(range(start, end + 1, step))
-                else:
-                    self.ranges[key] = list()
-                    value = start
-                    while value <= end:
-                        self.ranges[key].append(value)
-                        value *= step
-            self.total_combinations *= len(self.ranges[key])
-        self.current_combination = 0
-
-    def get_next_val(self):
-        """
-        Get the next combination of parameter values.
-
-        Returns:
-            A dictionary containing the current combination of parameter values.
-
-        Raises:
-            StopIteration: If all combinations have been iterated over.
-        """
-
-        # Check if all combinations have been exhausted
-        if self.current_combination >= self.total_combinations:
-            raise StopIteration("All combinations have been iterated over!")
-
-        # Build the current combination of values
-        result = {}
-        idx = self.current_combination
-        for key in self.keys:
-            range_len = len(self.ranges[key])
-            current_idx = idx % range_len
-            result[key] = self.ranges[key][current_idx]
-            idx //= range_len
-
-        # Increment the combination counter
-        self.current_combination += 1
-        return result
-
-    def reset(self):
-        """
-        Reset the iterator to the first combination.
-        """
-        self.current_combination = 0
-
-    def write_next_yaml_only_single_config(self):
-        try:
-            params = self.get_next_val()
-            # params is like {'block_m': 3, 'block_n': 3, 'block_k': 3, 'split_k': 3, 'num_stages': 3, 'num_warps': 3, 'num_ctas': 3}
-            block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas = (
-                params["block_m"],
-                params["block_n"],
-                params["block_k"],
-                params["split_k"],
-                params["num_stages"],
-                params["num_warps"],
-                params["num_ctas"],
-            )
-            new_config = generate_triton_config_only_single_config(
-                block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
-            )
-            with open(get_yaml_path(), "w") as file:
-                file.write(new_config)
-            return True
-        except StopIteration as e:
-            print(e)
-            return False
-
-    def write_next_yaml(self, entry="mm"):
-        """
-        Write the next configuration to the YAML file, replacing the specified entry.
-
-        Args:
-            entry (str, optional): The entry in the YAML file to replace. Defaults to "mm".
-
-        Returns:
-            bool: True if the operation was successful, False if all configurations have been iterated over.
-        """
-        try:
-            # Get the next parameter combination
-            params = self.get_next_val()
-            block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas = (
-                params["block_m"],
-                params["block_n"],
-                params["block_k"],
-                params["split_k"],
-                params["num_stages"],
-                params["num_warps"],
-                params["num_ctas"],
-            )
-
-            # Generate the new configuration
-            new_config = generate_triton_config(
-                block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
-            )
-
-            # Load the YAML file
-            yaml = YAML()
-            yaml_path = get_yaml_path()
-
-            if os.path.exists(yaml_path):
-                with open(yaml_path, "r") as file:
-                    yaml_data = yaml.load(file)
-            else:
-                yaml_data = {}
-
-            # Replace the specified entry with the new configuration
-            yaml_data[entry] = yaml.load(new_config)
-            # import warnings
-            # warnings.warn(f"{yaml_data[entry]}", UserWarning)
-
-            # Write the updated YAML data back to the file
-            with open(yaml_path, "w") as file:
-                yaml.dump(yaml_data, file)
-
-            print(f"Updated YAML file with new configuration for entry '{entry}'.")
-            return True
-
-        except StopIteration as e:
-            print(e)
-            return False
-
-
-class MMShapeGenerator:
-    def __init__(self, start, end, step, num=0):
-        """
-        Initializes the MMShapeGenerator with ranges for M, N, and K.
-        :param start: Start of the range (inclusive) for M, N, K.
-        :param end: End of the range (exclusive) for M, N, K.
-        :param step: Step size for the range of M, N, K.
-        """
-        self.start = start
-        self.end = end
-        self.step = step
-        self.num = num
-
-    def generate_fixed_step_shapes(self):
-        """
-        Generate all combinations of (M, N, K) within the specified ranges.
-        :return: A list of [M, N, K] combinations.
-        """
-        # Create ranges for M, N, K
-        m_range = range(self.start, self.end + 1, self.step)
-        n_range = range(self.start, self.end + 1, self.step)
-        k_range = range(self.start, self.end + 1, self.step)
-
-        # Generate the Cartesian product of all combinations for M, N, K.
-        shapes = list(itertools.product(m_range, n_range, k_range))
-
-        # Convert tuples to lists for output consistency
-        shapes = [list(shape) for shape in shapes]
-        return shapes
-
-    def generate_random_shapes(self, exclude_shapes=None):
-        """
-        Generate `num` random combinations of (M, N, K) within the specified ranges.
-        :param exclude_shapes: A list of shapes to exclude from the random generation.
-        :return: A list of [M, N, K] combinations.
-        """
-        if self.num is None:
-            raise ValueError(
-                "Number of random shapes must be provided for random generation."
-            )
-
-        if exclude_shapes is None:
-            exclude_shapes = []
-
-        # Convert exclude_shapes to a set of tuples for faster lookup
-        exclude_set = set(tuple(shape) for shape in exclude_shapes)
-
-        # Generate random shapes
-        shapes = []
-        while len(shapes) < self.num:
-            m = random.randint(self.start, self.end)
-            n = random.randint(self.start, self.end)
-            k = random.randint(self.start, self.end)
-
-            if m % 16 != 0:
-                continue
-            if n % 16 != 0:
-                continue
-            if k % 16 != 0:
-                continue
-
-            shape = (m, n, k)
-
-            # Ensure the shape is not in the exclude list
-            if shape not in exclude_set:
-                shapes.append(list(shape))
-                exclude_set.add(shape)  # Prevent duplicates
-
-        return shapes
-
-    def save_to_yaml(
-        self, filename="configs/mm_shape.yaml", generate_fixed_shapes=True
-    ):
-        """
-        Save the generated shapes into a YAML file.
-        :param filename: Name of the YAML file to save the shapes.
-        """
-
-        if generate_fixed_shapes:
-            shapes = self.generate_fixed_step_shapes()
-        else:
-            exclude_shapes = self.generate_fixed_step_shapes()
-            shapes = self.generate_random_shapes(exclude_shapes)
-
-        data = {"MMBenchmark": {"shapes": shapes, "shape_desc": "M, N, K"}}
-
-        # Customize the Dumper to make sure the list is output in a flat format
-        class CustomDumper(yaml.SafeDumper):
-            def increase_indent(self, flow=False, indentless=False):
-                return super(CustomDumper, self).increase_indent(flow, False)
-
-        # Dump with PyYAML and ensure proper `[a, b, c]` formatting
-        with open(filename, "w") as f:
-            yaml.dump(
-                data,
-                f,
-                Dumper=CustomDumper,
-                default_flow_style=None,
-                allow_unicode=True,
-                sort_keys=False,
-                indent=2,
-            )
-
-    _iterated_shapes_static = None
-
-    def iterShapeOneByOne(
-        self, filename="configs/mm_shape.yaml", generate_fixed_shapes=True
-    ):
-        if MMShapeGenerator._iterated_shapes_static is None:
-            if generate_fixed_shapes:
-                shapes = self.generate_fixed_step_shapes()
-            else:
-                exclude_shapes = self.generate_fixed_step_shapes()
-                shapes = self.generate_random_shapes(exclude_shapes)
-            MMShapeGenerator._iterated_shapes_static = shapes
-
-        if MMShapeGenerator._iterated_shapes_static:
-            # shape = MMShapeGenerator._iterated_shapes_static.pop(0)
-            index = random.randrange(len(MMShapeGenerator._iterated_shapes_static))
-            shape = MMShapeGenerator._iterated_shapes_static.pop(index)
-            shapeM, shapeN, shapeK = shape[0], shape[1], shape[2]
-
-            data = {"MMBenchmark": {"shapes": [shape], "shape_desc": "M, N, K"}}
-
-            # Customize the Dumper to make sure the list is output in a flat format
-            class CustomDumper(yaml.SafeDumper):
-                def increase_indent(self, flow=False, indentless=False):
-                    return super(CustomDumper, self).increase_indent(flow, False)
-
-            # Dump with PyYAML and ensure proper `[a, b, c]` formatting
-            with open(filename, "w") as f:
-                yaml.dump(
-                    data,
-                    f,
-                    Dumper=CustomDumper,
-                    default_flow_style=None,
-                    allow_unicode=True,
-                    sort_keys=False,
-                    indent=2,
-                )
-
-            return True, shapeM, shapeN, shapeK
-        else:
-            print("No shapes left to iterate.")
-            return False, None, None, None
-
-
-class TunedParameterFunctions:
-    """
-    A class to encapsulate the functions used to generate parameters for the ParameterGenerator.
-
-    Attributes:
-        block_m_func (callable): Function to generate block_m.
-        block_k_func (callable): Function to generate block_k.
-        block_n_func (callable): Function to generate block_n.
-        split_k_func (callable): Function to generate split_k.
-        num_stages_func (callable): Function to generate num_stages.
-        num_warps_func (callable): Function to generate num_warps.
-        num_ctas_func (callable): Function to generate num_ctas.
-    """
-
-    def __init__(
-        self,
-        block_m_func: callable,
-        block_k_func: callable,
-        block_n_func: callable,
-        split_k_func: callable,
-        num_stages_func: callable,
-        num_warps_func: callable,
-        num_ctas_func: callable,
-    ):
-        """
-        Initializes the TunedParameterFunctions with the provided functions.
-
-        Args:
-            block_m_func (callable): Function to generate block_m.
-            block_k_func (callable): Function to generate block_k.
-            block_n_func (callable): Function to generate block_n.
-            split_k_func (callable): Function to generate split_k.
-            num_stages_func (callable): Function to generate num_stages.
-            num_warps_func (callable): Function to generate num_warps.
-            num_ctas_func (callable): Function to generate num_ctas.
-        """
-        self.block_m_func = block_m_func
-        self.block_k_func = block_k_func
-        self.block_n_func = block_n_func
-        self.split_k_func = split_k_func
-        self.num_stages_func = num_stages_func
-        self.num_warps_func = num_warps_func
-        self.num_ctas_func = num_ctas_func
-
-
-class TunedParameterGenerator:
-    """
-    A class to generate parameters (`block_m`, `block_k`, `block_n`, `split_k`, `num_stages`,
-    `num_warps`, `num_ctas`) based on input shapes (`shapeM`, `shapeK`, `shapeN`) and additional
-    function parameters.
-
-    This class encapsulates the logic for generating the 6 parameters using 6 function parameters.
-    The generated parameters are used for further computation or optimization.
-
-    Attributes:
-        shapeM (int): The first input shape dimension.
-        shapeK (int): The second input shape dimension.
-        shapeN (int): The third input shape dimension.
-        param_functions (TunedParameterFunctions): An instance of TunedParameterFunctions containing
-                                                   the functions to generate the parameters.
-
-    Methods:
-        __init__: Initializes the TunedParameterGenerator with input shapes and function parameters.
-        generate_parameters: Generates and returns the 6 parameters based on the input shapes and functions.
-        write_to_yaml: Write the generated configuration to the YAML file, replacing the specified entry.
-    """
-
-    def __init__(
-        self,
-        shapeM: int,
-        shapeK: int,
-        shapeN: int,
-        param_functions: TunedParameterFunctions,
-    ):
-        """
-        Initializes the TunedParameterGenerator with input shapes and function parameters.
-
-        Args:
-            shapeM (int): The first input shape dimension.
-            shapeK (int): The second input shape dimension.
-            shapeN (int): The third input shape dimension.
-            param_functions (TunedParameterFunctions): An instance of TunedParameterFunctions containing
-                                                       the functions to generate the parameters.
-        """
-        self.shapeM = shapeM
-        self.shapeK = shapeK
-        self.shapeN = shapeN
-        self.param_functions = param_functions
-        self.block_m_func = self.param_functions.block_m_func
-        self.block_k_func = self.param_functions.block_k_func
-        self.block_n_func = self.param_functions.block_n_func
-        self.split_k_func = self.param_functions.split_k_func
-        self.num_stages_func = self.param_functions.num_stages_func
-        self.num_warps_func = self.param_functions.num_warps_func
-        self.num_ctas_func = self.param_functions.num_ctas_func
-
-    def generate_parameters(self):
-        """
-        Generates and returns the 6 parameters based on the input shapes and functions.
-
-        Returns:
-            dict: A dictionary containing the generated parameters:
-                - block_m (int): Generated block_m value.
-                - block_k (int): Generated block_k value.
-                - block_n (int): Generated block_n value.
-                - split_k (int): Generated split_k value.
-                - num_stages (int): Generated num_stages value.
-                - num_warps (int): Generated num_warps value.
-                - num_ctas (int): Generated num_ctas value.
-        """
-        block_m = self.block_m_func(self.shapeM, self.shapeK, self.shapeN)
-        block_k = self.block_k_func(self.shapeM, self.shapeK, self.shapeN)
-        block_n = self.block_n_func(self.shapeM, self.shapeK, self.shapeN)
-        split_k = self.split_k_func(self.shapeM, self.shapeK, self.shapeN)
-        num_stages = self.num_stages_func(self.shapeM, self.shapeK, self.shapeN)
-        num_warps = self.num_warps_func(self.shapeM, self.shapeK, self.shapeN)
-        num_ctas = self.num_ctas_func(self.shapeM, self.shapeK, self.shapeN)
-
-        return {
-            "block_m": block_m,
-            "block_k": block_k,
-            "block_n": block_n,
-            "split_k": split_k,
-            "num_stages": num_stages,
-            "num_warps": num_warps,
-            "num_ctas": num_ctas,
-        }
-
-    def write_to_yaml(self, entry="mm"):
-        """
-        Write the generated configuration to the YAML file, replacing the specified entry.
-
-        Args:
-            entry (str, optional): The entry in the YAML file to replace. Defaults to "mm".
-
-        Returns:
-            bool: True if the operation was successful, False if all configurations have been iterated over.
-        """
-        try:
-            # Get the next parameter combination
-            params = self.generate_parameters()
-            block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas = (
-                params["block_m"],
-                params["block_n"],
-                params["block_k"],
-                params["split_k"],
-                params["num_stages"],
-                params["num_warps"],
-                params["num_ctas"],
-            )
-
-            # Generate the new configuration
-            new_config = generate_triton_config(
-                block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas
-            )
-
-            # Load the YAML file
-            yaml = YAML()
-            yaml_path = get_yaml_path()
-
-            if os.path.exists(yaml_path):
-                with open(yaml_path, "r") as file:
-                    yaml_data = yaml.load(file)
-            else:
-                yaml_data = {}
-
-            # Replace the specified entry with the new configuration
-            yaml_data[entry] = yaml.load(new_config)
-            # import warnings
-            # warnings.warn(f"{yaml_data[entry]}", UserWarning)
-
-            # Write the updated YAML data back to the file
-            with open(yaml_path, "w") as file:
-                yaml.dump(yaml_data, file)
-
-            print(f"Updated YAML file with new configuration for entry '{entry}'.")
-            return True
-
-        except StopIteration as e:
-            print(e)
-            return False
 
 
 def archive_file_with_timestamp(file_path, archive_dir="archive"):
@@ -1580,12 +1397,168 @@ def archive_file_with_timestamp(file_path, archive_dir="archive"):
     return new_file_path
 
 
+# ===----------------------------------------------------------------------===
+# User Specified Helper Function Definitions
+# ===----------------------------------------------------------------------===
+
+
+class ShapeGenerator:
+    """
+    A template class to generate shape parameter combinations based on user-defined
+    functions.
+    """
+
+    def __init__(self, excel_config, shape_generators):
+        """
+        Initialize the ShapeGenerator.
+
+        Args:
+            excel_config (dict): The configuration dictionary containing "shape_cols".
+            shape_generators (tuple): A tuple of user-defined generator functions.
+                                      Function names should follow the format `gen_<field_name>`.
+        """
+        self.shape_cols = excel_config["shape_cols"]
+        self.shape_generators = shape_generators
+        self._validate_generators()
+
+    def _validate_generators(self):
+        """
+        Validate that the provided generator functions match the fields in "shape_cols".
+        """
+        # Extract field names from generator function names
+        generator_fields = [gen.__name__[4:] for gen in self.shape_generators]
+
+        # Check if all required fields are covered
+        missing_fields = set(self.shape_cols) - set(generator_fields)
+        if missing_fields:
+            raise ValueError(
+                f"Missing generator functions for fields: {missing_fields}. "
+                f"Expected functions named 'gen_<field_name>'."
+            )
+
+        # Check if there are any extra fields
+        extra_fields = set(generator_fields) - set(self.shape_cols)
+        if extra_fields:
+            raise ValueError(
+                f"Extra generator functions for fields: {extra_fields}. "
+                f"These fields are not in 'shape_cols'."
+            )
+
+    def generate(self):
+        """
+        Generate all possible combinations of shape parameters.
+
+        Returns:
+            list: A list of dictionaries, where each dictionary represents a combination
+                  of shape parameters.
+        """
+        from itertools import product
+
+        # Map generator functions to their corresponding fields
+        generator_map = {gen.__name__[4:]: gen for gen in self.shape_generators}
+
+        # Generate values for each key
+        values = {}
+        for key in self.shape_cols:
+            values[key] = generator_map[key]()
+
+        # Generate all combinations
+        combinations = []
+        for combination in product(*values.values()):
+            param_dict = {
+                key: value for key, value in zip(self.shape_cols, combination)
+            }
+            combinations.append(param_dict)
+
+        return combinations
+
+
+class ConfigGenerator:
+    """
+    A template class to generate configuration parameter combinations based on user-defined functions.
+    """
+
+    def __init__(self, excel_config, config_generators):
+        """
+        Initialize the ConfigGenerator.
+
+        Args:
+            excel_config (dict): The configuration dictionary containing "config_cols".
+            config_generators (tuple): A tuple of user-defined generator functions.
+                                      Function names should follow the format `gen_<field_name>`.
+        """
+        self.config_cols = excel_config["config_cols"]
+        self.config_generators = config_generators
+        self._validate_generators()
+
+    def _validate_generators(self):
+        """
+        Validate that the provided generator functions match the fields in "config_cols".
+        """
+        # Extract field names from generator function names
+        generator_fields = [gen.__name__[4:] for gen in self.config_generators]
+
+        # Check if all required fields are covered
+        missing_fields = set(self.config_cols) - set(generator_fields)
+        if missing_fields:
+            raise ValueError(
+                f"Missing generator functions for fields: {missing_fields}. "
+                f"Expected functions named 'gen_<field_name>'."
+            )
+
+        # Check if there are any extra fields
+        extra_fields = set(generator_fields) - set(self.config_cols)
+        if extra_fields:
+            raise ValueError(
+                f"Extra generator functions for fields: {extra_fields}. "
+                f"These fields are not in 'config_cols'."
+            )
+
+    def generate(self):
+        """
+        Generate all possible combinations of configuration parameters.
+
+        Returns:
+            list: A list of dictionaries, where each dictionary represents a combination
+                  of configuration parameters.
+        """
+        from itertools import product
+
+        # Map generator functions to their corresponding fields
+        generator_map = {gen.__name__[4:]: gen for gen in self.config_generators}
+
+        # Generate values for each key
+        values = {}
+        for key in self.config_cols:
+            values[key] = generator_map[key]()
+
+        # Generate all combinations
+        combinations = []
+        for combination in product(*values.values()):
+            param_dict = {
+                key: value for key, value in zip(self.config_cols, combination)
+            }
+            combinations.append(param_dict)
+
+        return combinations
+
+
+# Convert each shape-config combination into a tuple format for comparison
+def convert_to_tuple(shape_config_pair, excel_config, dtype):
+    shape, config = shape_config_pair
+    return tuple(
+        [dtype]
+        + [shape[key] for key in excel_config["shape_cols"]]
+        + [config[key] for key in excel_config["config_cols"]]
+    )
+
+
 def run_perf_pytest(
     operation,
     shape_file,
     level="core",
-    warmup=5,
-    iter=5,
+    warmup=3,
+    iter=3,
     dtypes="float16",
     log="log",
     verbose=False,
@@ -1599,7 +1572,7 @@ def run_perf_pytest(
         warmup (int, optional): The number of warmup iterations. Defaults to 1.
         iter (int, optional): The number of test iterations. Defaults to 5.
         dtypes (str, optional): The data types to test. Defaults to "float16".
-        shape_file (str, optional): The path to the shape configuration file. Defaults to "configs/mm_shape.yaml".
+        shape_file (str, optional): The path to the shape configuration file. Defaults to "configs/shape.yaml".
         log (str, optional): The log file name. Defaults to "log".
     """
     # Construct the command as a list of arguments
@@ -1650,3 +1623,61 @@ def run_perf_pytest(
     filename = filename.replace("pytest_-", "").replace(".py_", "")
     filename = filename.replace("_-", "-").replace("/", "_")
     return filename
+
+
+def print_centered_label(label="START", color="green"):
+    """
+    Print a full-width colored line with a centered label.
+
+    Args:
+        label (str): The label to center (e.g., "START" or "END").
+        color (str): The color of the line and label. Options: "green", "red", etc.
+    """
+    # Get terminal width
+    terminal_width = os.get_terminal_size().columns
+
+    # Define color codes
+    colors = {
+        "green": "\033[32m",
+        "red": "\033[31m",
+        "yellow": "\033[33m",
+        "blue": "\033[34m",
+        "magenta": "\033[35m",
+        "cyan": "\033[36m",
+        "white": "\033[37m",
+    }
+    reset = "\033[0m"
+
+    # Get the color code
+    color_code = colors.get(color, "\033[32m")  # Default to green if color is invalid
+
+    # Calculate the position to center the label
+    label_length = len(label)
+    padding = (terminal_width - label_length) // 2
+
+    # Construct the line
+    line = (
+        color_code
+        + "=" * padding  # Left part of the line
+        + label  # Centered label
+        + "=" * (terminal_width - padding - label_length)  # Right part of the line
+        + reset  # Reset color
+    )
+
+    # Print the line
+    print(line, end="\n\n")
+
+
+stringDtype2TorchDtypeDict = {
+    "float16": "torch.float16",
+    "float32": "torch.float32",
+    "bfloat16": "torch.bfloat16",
+    "int16": "torch.int16",
+    "int32": "torch.int32",
+    "bool": "torch.bool",
+    "cfloat": "torch.cfloat",
+}
+
+
+def stringDtype2TorchDtype(stringDtype: str) -> str:
+    return stringDtype2TorchDtypeDict[stringDtype]

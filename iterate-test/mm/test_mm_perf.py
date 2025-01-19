@@ -4,9 +4,8 @@ import pycuda.autoinit  # noqa: F401
 import pycuda.driver as cuda
 import pytest
 import torch
-import yaml
 from attri_util import DEFAULT_METRICS, FLOAT_DTYPES
-from performance_utils import Benchmark, get_yaml_path
+from performance_utils import Benchmark
 
 device = cuda.Device(0)  # MUST set `export CUDA_VISIBLE_DEVICES=?`
 max_threads_per_block = device.get_attribute(
@@ -18,7 +17,7 @@ max_warps_per_cta = int(max_threads_per_block / cuda.device_attribute.WARP_SIZE)
 """
 Usage:
     pytest test_mm_perf.py --level core --warmup 1000 --iter 1000 \
-        --dtypes "float16" --shape_file mm_shape.yaml --record log
+        --dtypes "float16" --shape_file configs/shape.yaml --record log
 
 --mode: "cpu" or NOTSET
     Specify how to measure latency, 'cpu' for CPU-side and NOTSET for Device-size.
@@ -100,30 +99,6 @@ def mm_input_fn(m, n, k, cur_dtype, device):
     yield inp1, inp2
 
 
-def read_config_from_yaml(result_dict):
-    with open(get_yaml_path(), "r") as f:
-        config = yaml.safe_load(f)
-        if (
-            "mm" in config
-            and isinstance(config["mm"], list)
-            and "META" in config["mm"][0]
-        ):
-            meta = config["mm"][0]["META"]
-            # Update result_dict with values from META and other keys
-            items_to_add = {
-                "BLOCK_M": meta.get("BLOCK_M", None),
-                "BLOCK_N": meta.get("BLOCK_N", None),
-                "BLOCK_K": meta.get("BLOCK_K", None),
-                "SPLIT_K": meta.get("SPLIT_K", None),
-                "num_stages": config["mm"][0].get("num_stages", None),
-                "num_warps": config["mm"][0].get("num_warps", None),
-                "num_ctas": config["mm"][0].get("num_ctas", None),
-            }
-            autotune_key = "autotune_configs"
-            if autotune_key not in result_dict:
-                result_dict[autotune_key] = items_to_add
-
-
 @pytest.mark.parametrize(
     "op_name, torch_op, input_fn",
     [
@@ -143,4 +118,4 @@ def test_mm_benchmark(op_name, torch_op, input_fn):
         dtypes=FLOAT_DTYPES,
         return_all_times=True,  # Return all latencies in a list and print to the log
     )
-    bench.run(read_config_from_yaml)
+    bench.run()
