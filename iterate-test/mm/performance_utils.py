@@ -2,6 +2,7 @@ import ast
 import gc
 import glob
 import importlib
+import inspect
 import itertools
 import logging
 import os
@@ -1560,6 +1561,143 @@ class ConfigGenerator:
             combinations.append(param_dict)
 
         return combinations
+
+
+class ParameterMismatchError(Exception):
+    """
+    Custom exception for parameter mismatches.
+    """
+
+    def __init__(self, message, func_params, expected_params, mismatch_type):
+        super().__init__(message)
+        self.func_params = func_params
+        self.expected_params = expected_params
+        self.mismatch_type = mismatch_type
+
+    def __str__(self):
+        return (
+            f"{self.mismatch_type}:\n"
+            f"  Function parameters: {self.func_params}\n"
+            f"  Expected parameters: {self.expected_params}"
+        )
+
+
+class TunedConfigGenerator:
+    """
+    A template class to generate tuned configuration parameter combinations based on user-defined
+    functions.
+    """
+
+    def __init__(self, excel_config, config_generators, shapegen: ShapeGenerator):
+        """
+        Initialize the TunedConfigGenerator.
+
+        Args:
+            excel_config (dict): The configuration dictionary containing "config_cols".
+            config_generators (tuple): A tuple of user-defined generator functions.
+                                      Function names should follow the format `gen_<field_name>`.
+            shapegen (ShapeGenerator): The `ShapeGenerator` instance that the configs generated for.
+        """
+        self.config_cols = excel_config["config_cols"]
+        self.shape_cols = excel_config["shape_cols"]
+        self.config_generators = config_generators
+        self.shapes_list = shapegen.generate()
+        self._validate_generators()
+
+    def _validate_generators(self):
+        """
+        Validate that the provided generator functions match the fields in "config_cols".
+        """
+
+        # Extract field names from generator function names
+        generator_fields = [gen.__name__[4:] for gen in self.config_generators]
+
+        # Check if all required fields are covered
+        missing_fields = set(self.config_cols) - set(generator_fields)
+        if missing_fields:
+            raise ValueError(
+                f"Missing generator functions for fields: {missing_fields}. "
+                f"Expected functions named 'gen_<field_name>'."
+            )
+
+        # Check if there are any extra fields
+        extra_fields = set(generator_fields) - set(self.config_cols)
+        if extra_fields:
+            raise ValueError(
+                f"Extra generator functions for fields: {extra_fields}. "
+                f"These fields are not in 'config_cols'."
+            )
+
+        # Check if each generation function has the parameters that contails all of
+        # items in `slef.shape_cols`.
+        for func in self.config_generators:
+            self._check_parameters_match(func, self.shape_cols)
+
+    def _check_parameters_match(self, func, param_names):
+        """
+        Check if the parameter list of a function matches exactly with a given list of parameter
+        names. If not, raise a detailed error indicating the type of mismatch.
+
+        Args:
+            func (callable): The function to check.
+            param_names (list): A list of expected parameter names.
+
+        Raises:
+            ParameterMismatchError: If the parameter list does not match `param_names` exactly.
+        """
+        # Get the function's signature
+        sig = inspect.signature(func)
+
+        # Extract the parameter names from the signature
+        func_params = list(sig.parameters.keys())
+
+        # Check for exact match (order and names)
+        exact_match = func_params == param_names
+        if exact_match:
+            return  # No error if exact match
+
+        # Check for name match (ignoring order)
+        name_match = set(func_params) == set(param_names)
+
+        # Determine the type of mismatch
+        if not name_match:
+            raise ParameterMismatchError(
+                "Parameter names do not match.",
+                func_params,
+                param_names,
+                "Name mismatch",
+            )
+        else:
+            raise ParameterMismatchError(
+                "Parameter names match, but the order is incorrect.",
+                func_params,
+                param_names,
+                "Order mismatch",
+            )
+
+    def generate(self):
+        """
+        Generate a list of tuples, where each item in this list has two items, and the first
+        one is the dictionary contains a shape detail, and the second one is its corresponding
+        configuration parameters. And the shape detail and its corresponding config parameters
+        are all dicts.
+
+        Returns:
+            list: A list of tuples, where each tuple has two items:
+                  - "shape": The shape ditails (e.g., {"shape_detail_M": 2048, ...}).
+                  - "config": The generated configuration dictionary (e.g., {"BLOCK_M": 512, ...}).
+        """
+        result = []
+        for shape in self.shapes_list:
+            config = {}
+            for gen_func in self.config_generators:
+                # Extract the field name from the generator function name
+                field_name = gen_func.__name__[4:]
+                # Call the generator function with the shape parameters
+                config[field_name] = gen_func(**shape)
+            # Append the shape and config to the result
+            result.append((shape, config))
+        return result
 
 
 # Convert each shape-config combination into a tuple format for comparison
