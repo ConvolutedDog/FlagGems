@@ -6,7 +6,7 @@ import sys
 from collections import defaultdict
 
 import attri_util
-from performance_utils import (  # MMShapeGenerator,; ParameterIterator,
+from performance_utils import (
     ConfigGenerator,
     ShapeGenerator,
     archive_file_with_timestamp,
@@ -39,6 +39,8 @@ pytest_data_type = "float16"
 pytest_verbose = True
 pytest_warmup_runs = 3
 pytest_iter_runs = 3
+
+filter_out_repeat_comb = True
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -84,9 +86,10 @@ excel_config = {
     # Shape description of shape yaml. It should correspond one-to-one with "shape_cols".
     "shape_desc": ["M", "N", "K"],
 }
-read_native_flaggems_from_trainset(
-    tarinSetPath="./train-set", datatype=pytest_data_type, config=excel_config
-)
+if filter_out_repeat_comb:
+    read_native_flaggems_from_trainset(
+        tarinSetPath="./train-set", datatype=pytest_data_type, config=excel_config
+    )
 config_format = read_config_from_yaml(pytest_operation_name)
 print(f"Using config format of {config_format} to write configs.")
 
@@ -200,16 +203,19 @@ shape_config_combinations = list(
 # ===---------------------------------------------------------------------------------===
 
 # Filter out combinations that have already been traversed
-shape_config_combinations = [
-    pair
-    for pair in shape_config_combinations
-    if convert_to_tuple(pair, excel_config, stringDtype2TorchDtype(pytest_data_type))
-    not in have_itered_shape_config_pairs
-]
+if filter_out_repeat_comb:
+    shape_config_combinations = [
+        pair
+        for pair in shape_config_combinations
+        if convert_to_tuple(
+            pair, excel_config, stringDtype2TorchDtype(pytest_data_type)
+        )
+        not in have_itered_shape_config_pairs
+    ]
 
 if print_shape_config_combinations:
-    for t in shape_config_combinations:
-        print(t[0], t[1])
+    for shape, config in shape_config_combinations:
+        print(shape, config)
 
 
 # ===---------------------------------------------------------------------------------===

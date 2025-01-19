@@ -20,6 +20,7 @@ import pytest
 import torch
 import yaml
 from ruamel.yaml import YAML
+from tqdm import tqdm
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.abspath(os.path.join(current_dir, "../../src"))
@@ -105,10 +106,22 @@ def read_native_flaggems_from_trainset(
         or localkey_during_this_test is None
         or data_type is None
     ) and (not len(xlsx_files) == 0):
-        for xlsxpath in xlsx_files:
+        # for xlsxpath in xlsx_files:
+        for xlsxpath in tqdm(xlsx_files, desc="Processing Excel files"):
             all_sheets = pd.read_excel(xlsxpath, sheet_name=None)
-            for sheet_name, data in all_sheets.items():
-                for index, row in data.iterrows():
+            # for sheet_name, data in all_sheets.items():
+            for sheet_name, data in tqdm(
+                all_sheets.items(),
+                desc=f"    Processing sheets in {os.path.basename(xlsxpath)}",
+                leave=False,
+            ):
+                # for index, row in data.iterrows():
+                for index, row in tqdm(
+                    data.iterrows(),
+                    desc=f"        Processing rows in {sheet_name}",
+                    leave=False,
+                    total=len(data),
+                ):
                     dtype = row[config["dtype_col"]]
                     if datatype in dtype:
                         shape_cols = [int(row[col]) for col in config["shape_cols"]]
@@ -1187,6 +1200,12 @@ class Benchmark:
                         # the warmup and repeats runs being not equal to the other runtime
                         # tests, such as our method, torch, torch.compile. So, this should be
                         # ascertained whether it is feasible.
+
+                        # BUG or not BUG: When we use trainsets to filter out repeated shape
+                        # and config onfigurations, this `speedup_vs_native_flaggems_trainset`
+                        # may always be null, for the reason that all tested combinations are
+                        # not likely to occur in trainsets.
+
                         # read_native_flaggems_from_trainset(datatype=str(dtype))
 
                         # Example Format of mm op: {(dtype, M, K, N): optimal latency}
