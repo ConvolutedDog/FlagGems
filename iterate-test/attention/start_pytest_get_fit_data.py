@@ -1,18 +1,29 @@
 import importlib
+import itertools
+import os
 import subprocess
 import sys
 from collections import defaultdict
 
+import attri_util
 from performance_utils import (
+    ConfigGenerator,
     ShapeGenerator,
-    TunedConfigGenerator,
     archive_file_with_timestamp,
+    convert_to_tuple,
+    have_itered_shape_config_pairs,
     print_centered_label,
     read_config_from_yaml,
+    read_native_flaggems_from_trainset,
     run_perf_pytest,
+    stringDtype2TorchDtype,
     write_config_to_yaml,
     write_shapes_to_yaml,
 )
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.abspath(os.path.join(current_dir, "../../src"))
+sys.path.append(src_dir)
 
 # flake8: noqa: E402
 import flag_gems
@@ -21,13 +32,15 @@ import flag_gems
 # User-Specified Parameters
 # ===---------------------------------------------------------------------------------===
 
-pytest_operation_name = "mm"
+pytest_operation_name = "attention"
 # Optional["float16", "float32", "bfloat16", "int16", "int32", "bool", "cfloat"]
 pytest_data_type = "float16"
 
 pytest_verbose = True
 pytest_warmup_runs = 3
 pytest_iter_runs = 3
+
+filter_out_repeat_comb = False
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -56,23 +69,31 @@ excel_config = {
     # Data type.
     "dtype_col": "dtype",
     # Shape parameters.
-    "shape_cols": ["shape_detail_M", "shape_detail_N", "shape_detail_K"],
+    "shape_cols": [
+        "shape_detail_B",
+        "shape_detail_H",
+        "shape_detail_L",
+        "shape_detail_D",
+    ],
     # Auto-tune configs.
     "config_cols": [
-        "BLOCK_M",
-        "BLOCK_N",
-        "BLOCK_K",
-        "SPLIT_K",
-        "num_stages",
-        "num_warps",
+        "block_m",
+        "block_n",
+        "pre_load_v",
+        "warps",
+        "stages",
     ],
     # Performance.
     "latency_col": "latency",
     # Benchmark name of shape yaml.
-    "bench_name": "MMBenchmark",
+    "bench_name": "AttentionBenchmark",
     # Shape description of shape yaml. It should correspond one-to-one with "shape_cols".
-    "shape_desc": ["M", "N", "K"],
+    "shape_desc": [],
 }
+if filter_out_repeat_comb:
+    read_native_flaggems_from_trainset(
+        tarinSetPath="./train-set", datatype=pytest_data_type, config=excel_config
+    )
 config_format = read_config_from_yaml(pytest_operation_name)
 print(f"Using config format of {config_format} to write configs.")
 
@@ -99,7 +120,7 @@ archive_file_with_timestamp(result_file)
 
 
 # ===---------------------------------------------------------------------------------===
-# Shape Generator Functions
+# Shape and Configuration Parameter Generator Functions
 # ===---------------------------------------------------------------------------------===
 # This section contains functions that generate various parameters for shape details and
 # configuration options. These parameters are used to create different configurations for
@@ -112,99 +133,40 @@ archive_file_with_timestamp(result_file)
 
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
-def gen_shape_detail_M():
-    return [2048, 1024]
+def gen_shape_detail_B():
+    return [4]
 
 
-def gen_shape_detail_K():
-    return [2048, 512]
+def gen_shape_detail_H():
+    return [8]
 
 
-def gen_shape_detail_N():
-    return [2048, 4096]
+def gen_shape_detail_L():
+    return [512]
 
 
-# ===---------------------------------------------------------------------------------===
-# Configuration Parameter Generation Functions
-# ===---------------------------------------------------------------------------------===
-# This section contains functions to generate configuration parameters (e.g., block sizes,
-# split factors, number of stages, etc.) based on input shapes (M, K, N). These functions
-# use predefined formulas to calculate optimal values for each parameter.
-# ===---------------------------------------------------------------------------------===
+def gen_shape_detail_D():
+    return [128]
 
 
-def discretize_to_multiple(x, multiple):
-    return round(x / multiple) * multiple
+def gen_block_m():
+    return [64, 128]
 
 
-# Define functions to generate parameters
-def gen_BLOCK_M(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    block m: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
-    """
-    res = (
-        5.02754660e-5 * shape_detail_M
-        + 1.24650843e-05 * shape_detail_K
-        + 5.70746029e-05 * shape_detail_N
-        + 0.951953125
-    )
-    return 2 ** (round(res + 5))
+def gen_block_n():
+    return [32, 64, 128]
 
 
-def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    bolck k: -4.32182761e-05 1.28128949e-05 -4.64046703e-05 0.47832031249999984 5
-    """
-    res = (
-        -4.32182761e-05 * shape_detail_M
-        + 1.28128949e-05 * shape_detail_K
-        + -4.64046703e-05 * shape_detail_N
-        + 0.47832031249999984
-    )
-    return 2 ** (round(res + 5))
+def gen_pre_load_v():
+    return [True, False]
 
 
-def gen_BLOCK_N(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    block n: 4.52714808e-05 -7.57329604e-06 3.63630407e-05 0.52656250 6
-    """
-    res = (
-        4.52714808e-05 * shape_detail_M
-        + -7.57329604e-06 * shape_detail_K
-        + 3.63630407e-05 * shape_detail_N
-        + 0.52656250
-    )
-    return 2 ** (round(res + 6))
+def gen_warps():
+    return [4, 8]
 
 
-def gen_SPLIT_K(shape_detail_M, shape_detail_N, shape_detail_K):
-    return 1
-
-
-def gen_num_stages(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    num stages: -1.34748571e-05 -7.30402329e-06 -6.40644747e-06 1.0521484374999996 1
-    """
-    res = (
-        -1.34748571e-05 * shape_detail_M
-        + -7.30402329e-06 * shape_detail_K
-        + -6.40644747e-06 * shape_detail_N
-        + 1.0521484374999996
-    )
-    return 2 ** (round(res + 1))
-
-
-def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    num warps: -1.61563649e-05 2.72414264e-05 -2.95751235e-05 1.27919921875 1
-    """
-    res = (
-        -1.61563649e-05 * shape_detail_M
-        + 2.72414264e-05 * shape_detail_K
-        + -2.95751235e-05 * shape_detail_N
-        + 1.27919921875
-    )
-    return 2 ** (round(res + 1))
+def gen_stages():
+    return [1, 2, 3]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -219,20 +181,36 @@ def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
 # ===---------------------------------------------------------------------------------===
 
 shapegen = ShapeGenerator(
-    excel_config, (gen_shape_detail_M, gen_shape_detail_K, gen_shape_detail_N)
-)
-
-# print(shapegen.generate())
-# for kv in shapegen.generate():
-#     print(kv)
-
-tunedconfiggen = TunedConfigGenerator(
     excel_config,
-    (gen_BLOCK_M, gen_BLOCK_K, gen_BLOCK_N, gen_SPLIT_K, gen_num_stages, gen_num_warps),
-    shapegen,
+    (gen_shape_detail_B, gen_shape_detail_H, gen_shape_detail_L, gen_shape_detail_D),
+)
+configgen = ConfigGenerator(
+    excel_config,
+    (gen_block_m, gen_block_n, gen_pre_load_v, gen_warps, gen_stages),
 )
 
-shape_config_combinations = tunedconfiggen.generate()
+shape_config_combinations = list(
+    itertools.product(shapegen.generate(), configgen.generate())
+)
+
+
+# ===---------------------------------------------------------------------------------===
+# Filter Out Already Iterated Shape-Config Combinations
+# ===---------------------------------------------------------------------------------===
+# This section filters out shape-config combinations that have already been traversed and
+# stored in `have_itered_shape_config_pairs`.
+# ===---------------------------------------------------------------------------------===
+
+# Filter out combinations that have already been traversed
+if filter_out_repeat_comb:
+    shape_config_combinations = [
+        pair
+        for pair in shape_config_combinations
+        if convert_to_tuple(
+            pair, excel_config, stringDtype2TorchDtype(pytest_data_type)
+        )
+        not in have_itered_shape_config_pairs
+    ]
 
 if print_shape_config_combinations:
     for shape, config in shape_config_combinations:

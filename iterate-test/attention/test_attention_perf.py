@@ -1,11 +1,9 @@
-from typing import Generator
-
 import pycuda.autoinit  # noqa: F401
 import pycuda.driver as cuda
 import pytest
 import torch
-from attri_util import DEFAULT_METRICS, FLOAT_DTYPES
-from performance_utils import Benchmark
+from attri_util import DEFAULT_METRICS
+from performance_utils import GenericBenchmark
 
 device = cuda.Device(0)  # MUST set `export CUDA_VISIBLE_DEVICES=?`
 max_threads_per_block = device.get_attribute(
@@ -52,8 +50,10 @@ Usage:
 """
 
 
-class MMBenchmark(Benchmark):
-    """Benchmark for mm."""
+class AttentionBenchmark(GenericBenchmark):
+    """
+    benchmark for attention
+    """
 
     # ['latency_base', 'latency', 'speedup', 'tflops']
     DEFAULT_METRICS = DEFAULT_METRICS[:] + ["tflops"] + ["legacy_shape"]
@@ -64,58 +64,29 @@ class MMBenchmark(Benchmark):
     DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_torch_compile"]
     DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_native_flaggems"]
     # TODO: fix this, this has to read excel each time, maybe give up this func.
-    # DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_native_flaggems_trainset"]
-
-    def __init__(self, *args, input_fn, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.input_fn = input_fn
-
-    def get_input_iter(self, cur_dtype) -> Generator:
-        """`self.shapes` can be defined in `core_shapes.yaml`. And if so, this
-        configuration is preferred and can be identified by the op name (e.g.
-        `mm`) or the class name of the benchmark (e.g. `MMBenchmark`)."""
-        for m, n, k in self.shapes:
-            yield from self.input_fn(m, n, k, cur_dtype, self.device)
+    DEFAULT_METRICS = DEFAULT_METRICS[:] + ["speedup_vs_native_flaggems_trainset"]
 
     def set_more_shapes(self):
-        """Other appended shapes can be defined here. Only if `--level comprehensive`
-        is used and not set `--query`, the appended shapes here will be used."""
-        pass
-
-    def get_tflops(self, op, *args, **kwargs):
-        """Calculate the total FLOPs of the op."""
-        total_flops = 0
-        # shape(m,k)(k,n)
-        # total_flops mxnx2k
-        assert self.op_name == "mm", "The operation is not mm!"
-        total_flops = args[0].shape[0] * args[0].shape[1] * args[1].shape[1] * 2
-
-        return total_flops
+        # self.shapes is a list of tuples, each containing three elements:
+        # (batch, num_heads, seq_len, head_size).
+        return None
 
 
-def mm_input_fn(m, n, k, cur_dtype, device):
-    inp1 = torch.randn([m, k], dtype=cur_dtype, device=device)
-    inp2 = torch.randn([k, n], dtype=cur_dtype, device=device)
-    yield inp1, inp2
+@pytest.mark.attention
+def test_perf_scaled_dot_product_attention():
+    def scaled_dot_product_attention_kwargs(shape, dtype, device):
+        query = torch.randn(shape, device=device, dtype=dtype)
+        key = torch.randn(shape, device=device, dtype=dtype)
+        value = torch.randn(shape, device=device, dtype=dtype)
+        yield query, key, value, None, 0.0, True
 
-
-@pytest.mark.parametrize(
-    "op_name, torch_op, input_fn",
-    [
-        pytest.param(
-            "mm",
-            torch.Tensor.mm,
-            mm_input_fn,
-            marks=pytest.mark.mm,
-        ),
-    ],
-)
-def test_mm_benchmark(op_name, torch_op, input_fn):
-    bench = MMBenchmark(
-        input_fn=input_fn,
-        op_name=op_name,
-        torch_op=torch_op,
-        dtypes=FLOAT_DTYPES,
-        return_all_times=True,  # Return all latencies in a list and print to the log
+    bench = AttentionBenchmark(
+        op_name="scaled_dot_product_attention",
+        input_fn=scaled_dot_product_attention_kwargs,
+        torch_op=torch.nn.functional.scaled_dot_product_attention,
+        dtypes=[
+            torch.float16,
+            torch.bfloat16,
+        ],
     )
     bench.run()

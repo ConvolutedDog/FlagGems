@@ -260,13 +260,13 @@ for config_key in grouped_shape_config_combinations:
 
     # Reload the configuration and the operation
     flag_gems.runtime.config_loader = flag_gems.runtime.ConfigLoader.reset_instance()
-    importlib.reload(sys.modules["flag_gems.ops.mm"])
+    importlib.reload(sys.modules["flag_gems.ops." + pytest_operation_name])
 
     # Write the shapes to YAML
     write_shapes_to_yaml(
         [shape_pair[0] for shape_pair in grouped_shape_config_combinations[config_key]],
         excel_config,
-        output_path="configs/shape.yaml",
+        output_path=pytest_shape_file,
     )
 
     if print_grouped_shape_config_combinations:
