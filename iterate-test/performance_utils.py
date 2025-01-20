@@ -24,7 +24,7 @@ from ruamel.yaml import YAML
 from tqdm import tqdm
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.abspath(os.path.join(current_dir, "../../src"))
+src_dir = os.path.abspath(os.path.join(current_dir, "../src"))
 sys.path.append(src_dir)
 
 # flake8: noqa: E402

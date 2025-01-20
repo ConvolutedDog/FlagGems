@@ -1,7 +1,10 @@
 import importlib
+import os
 import subprocess
 import sys
 from collections import defaultdict
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from performance_utils import (
     ShapeGenerator,

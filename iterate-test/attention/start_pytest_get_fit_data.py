@@ -5,6 +5,8 @@ import subprocess
 import sys
 from collections import defaultdict
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import attri_util
 from performance_utils import (
     ConfigGenerator,
