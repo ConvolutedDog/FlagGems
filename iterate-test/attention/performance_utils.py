@@ -99,7 +99,8 @@ def read_native_flaggems_from_trainset(
         ).strip()
         warnings.warn(warning_message, UserWarning)
 
-    xlsx_files = glob.glob(os.path.join(tarinSetPath, "*.xlsx"))
+    # TODO: Change var name from "xlsx" to "csv"
+    xlsx_files = glob.glob(os.path.join(tarinSetPath, "*.csv"))
 
     if (
         len(optimal_latency_of_native_flaggems) == 0
@@ -109,67 +110,50 @@ def read_native_flaggems_from_trainset(
     ) and (not len(xlsx_files) == 0):
         # for xlsxpath in xlsx_files:
         for xlsxpath in tqdm(xlsx_files, desc="Processing Excel files"):
-            all_sheets = pd.read_excel(xlsxpath, sheet_name=None)
-            # for sheet_name, data in all_sheets.items():
-            for sheet_name, data in tqdm(
-                all_sheets.items(),
-                desc=f"    Processing sheets in {os.path.basename(xlsxpath)}",
+            data = pd.read_csv(xlsxpath)
+
+            for index, row in tqdm(
+                data.iterrows(),
+                desc=f"    Processing rows in {os.path.basename(xlsxpath)}",
                 leave=False,
+                total=len(data),
             ):
-                # for index, row in data.iterrows():
-                for index, row in tqdm(
-                    data.iterrows(),
-                    desc=f"        Processing rows in {sheet_name}",
-                    leave=False,
-                    total=len(data),
-                ):
-                    dtype = row[config["dtype_col"]]
-                    if datatype in dtype:
-                        shape_cols = [int(row[col]) for col in config["shape_cols"]]
-                        config_cols = [int(row[col]) for col in config["config_cols"]]
-                        latency = row[config["latency_col"]]
-
-                        continue_flag = False
-
-                        if (
-                            isinstance(latency, str)
-                            and latency.startswith("[")
-                            and latency.endswith("]")
-                        ):
-                            try:
-                                latency_list = ast.literal_eval(latency)
-                                if isinstance(latency_list, list):
-                                    latency = statistics.mean(latency_list)
-                                else:
-                                    continue_flag = True
-                            except:
-                                continue_flag = True
-                        else:
-                            try:
-                                latency = float(latency)
-                            except ValueError:
-                                continue_flag = True
-
-                        localkey = tuple([dtype] + shape_cols)
-                        localkey_during_this_test = localkey
-
-                        data_type = dtype
-
-                        have_itered_shape_config_pairs.append(
-                            tuple([dtype] + shape_cols + config_cols)
-                        )
-
-                        if not continue_flag:
-                            if localkey not in optimal_latency_of_native_flaggems:
-                                optimal_latency_of_native_flaggems[localkey] = latency
+                dtype = row[config["dtype_col"]]
+                if datatype in dtype:
+                    shape_cols = [int(row[col]) for col in config["shape_cols"]]
+                    config_cols = [int(row[col]) for col in config["config_cols"]]
+                    latency = row[config["latency_col"]]
+                    continue_flag = False
+                    if (
+                        isinstance(latency, str)
+                        and latency.startswith("[")
+                        and latency.endswith("]")
+                    ):
+                        try:
+                            latency_list = ast.literal_eval(latency)
+                            if isinstance(latency_list, list):
+                                latency = statistics.mean(latency_list)
                             else:
-                                if (
-                                    latency
-                                    < optimal_latency_of_native_flaggems[localkey]
-                                ):
-                                    optimal_latency_of_native_flaggems[
-                                        localkey
-                                    ] = latency
+                                continue_flag = True
+                        except:
+                            continue_flag = True
+                    else:
+                        try:
+                            latency = float(latency)
+                        except ValueError:
+                            continue_flag = True
+                    localkey = tuple([dtype] + shape_cols)
+                    localkey_during_this_test = localkey
+                    data_type = dtype
+                    have_itered_shape_config_pairs.append(
+                        tuple([dtype] + shape_cols + config_cols)
+                    )
+                    if not continue_flag:
+                        if localkey not in optimal_latency_of_native_flaggems:
+                            optimal_latency_of_native_flaggems[localkey] = latency
+                        else:
+                            if latency < optimal_latency_of_native_flaggems[localkey]:
+                                optimal_latency_of_native_flaggems[localkey] = latency
 
 
 def triton_testing_do_bench_rewritting(

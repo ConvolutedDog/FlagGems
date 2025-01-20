@@ -3,8 +3,11 @@ import json
 import pandas as pd
 
 # ===================================
-input_log = "results/mm-result.txt"
-output_excel = "results/mm-result-eval-model-512-512-8192-vs-compile-nativeflag-4090-all-param-coverd-fangzhen.xlsx"
+input_log = "results/attention-result.txt"
+output_excel = (
+    "results/attention-1_4_8_16_32_64-8_16_32_64-512_1024_2048-32_64_128-"
+    + "16_32_64_128-16_32_64_128-true_false-4_8-1_2_3-fixedshape-allcover-4090-1.csv"
+)
 # ===================================
 
 f = open(input_log, "r")
@@ -17,17 +20,16 @@ df = pd.DataFrame(
         "dtype",
         "mode",
         "level",
-        "BLOCK_M",
-        "BLOCK_N",
-        "BLOCK_K",
-        "SPLIT_K",
-        "num_stages",
-        "num_warps",
-        "num_ctas",
+        "block_m",
+        "block_n",
+        "pre_load_v",
+        "warps",
+        "stages",
         "legacy_shape",
-        "shape_detail_M",
-        "shape_detail_K",
-        "shape_detail_N",
+        "shape_detail_B",
+        "shape_detail_H",
+        "shape_detail_L",
+        "shape_detail_D",
         "latency_base",
         "latency",
         "gbps_base",
@@ -66,17 +68,16 @@ for line in lines:
                 "dtype": data["dtype"],
                 "mode": data["mode"],
                 "level": data["level"],
-                "BLOCK_M": autotune_configs["BLOCK_M"],
-                "BLOCK_N": autotune_configs["BLOCK_N"],
-                "BLOCK_K": autotune_configs["BLOCK_K"],
-                "SPLIT_K": autotune_configs["SPLIT_K"],
-                "num_stages": autotune_configs["num_stages"],
-                "num_warps": autotune_configs["num_warps"],
-                "num_ctas": autotune_configs["num_ctas"],
+                "block_m": autotune_configs["block_m"],
+                "block_n": autotune_configs["block_n"],
+                "pre_load_v": autotune_configs["pre_load_v"],
+                "warps": autotune_configs["warps"],
+                "stages": autotune_configs["stages"],
                 "legacy_shape": result["legacy_shape"],
-                "shape_detail_M": shape_detail[0][0],
-                "shape_detail_K": shape_detail[0][1],
-                "shape_detail_N": shape_detail[1][1],
+                "shape_detail_B": shape_detail[0][0],
+                "shape_detail_H": shape_detail[0][1],
+                "shape_detail_L": shape_detail[0][2],
+                "shape_detail_D": shape_detail[0][3],
                 "latency_base": result["latency_base"],
                 "latency": result["latency"],
                 "gbps_base": result["gbps_base"],
@@ -100,6 +101,6 @@ for line in lines:
 
         df = pd.concat([df, pd.DataFrame(rows)], ignore_index=True)
 
-df.to_excel(output_excel, index=False)
+df.to_csv(output_excel, index=False)
 
 print("Written to " + output_excel)

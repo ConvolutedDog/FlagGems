@@ -33,20 +33,20 @@ import flag_gems
 # ===---------------------------------------------------------------------------------===
 
 pytest_operation_name = "attention"
-# Optional["float16", "float32", "bfloat16", "int16", "int32", "bool", "cfloat"]
+# Optional["float16", "bfloat16"]
 pytest_data_type = "float16"
 
 pytest_verbose = True
 pytest_warmup_runs = 3
 pytest_iter_runs = 3
 
-filter_out_repeat_comb = False
+filter_out_repeat_comb = True
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
 
 # Just don't edit this.
-print_shape_config_combinations = True
+print_shape_config_combinations = False
 print_grouped_shape_config_combinations = False
 
 
@@ -134,27 +134,28 @@ archive_file_with_timestamp(result_file)
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_B():
-    return [4]
+    return [1, 4, 8, 16, 32, 64]
 
 
 def gen_shape_detail_H():
-    return [8]
+    return [8, 16, 32, 64]
 
 
 def gen_shape_detail_L():
-    return [512]
+    return [512, 1024, 2048]
 
 
 def gen_shape_detail_D():
-    return [128]
+    return [32, 64, 128]
 
 
 def gen_block_m():
-    return [64, 128]
+    return [16, 32, 64, 128]
 
 
+# must block_n <= shape_detail_D
 def gen_block_n():
-    return [32, 64, 128]
+    return [16, 32, 64, 128]
 
 
 def gen_pre_load_v():
@@ -162,7 +163,10 @@ def gen_pre_load_v():
 
 
 def gen_warps():
-    return [4, 8]
+    return [
+        4,
+        8,
+    ]
 
 
 def gen_stages():

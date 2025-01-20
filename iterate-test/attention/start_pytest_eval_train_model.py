@@ -21,8 +21,8 @@ import flag_gems
 # User-Specified Parameters
 # ===---------------------------------------------------------------------------------===
 
-pytest_operation_name = "mm"
-# Optional["float16", "float32", "bfloat16", "int16", "int32", "bool", "cfloat"]
+pytest_operation_name = "attention"
+# Optional["float16", "bfloat16"]
 pytest_data_type = "float16"
 
 pytest_verbose = True
@@ -56,22 +56,26 @@ excel_config = {
     # Data type.
     "dtype_col": "dtype",
     # Shape parameters.
-    "shape_cols": ["shape_detail_M", "shape_detail_N", "shape_detail_K"],
+    "shape_cols": [
+        "shape_detail_B",
+        "shape_detail_H",
+        "shape_detail_L",
+        "shape_detail_D",
+    ],
     # Auto-tune configs.
     "config_cols": [
-        "BLOCK_M",
-        "BLOCK_N",
-        "BLOCK_K",
-        "SPLIT_K",
-        "num_stages",
-        "num_warps",
+        "block_m",
+        "block_n",
+        "pre_load_v",
+        "warps",
+        "stages",
     ],
     # Performance.
     "latency_col": "latency",
     # Benchmark name of shape yaml.
-    "bench_name": "MMBenchmark",
+    "bench_name": "AttentionBenchmark",
     # Shape description of shape yaml. It should correspond one-to-one with "shape_cols".
-    "shape_desc": ["M", "N", "K"],
+    "shape_desc": [],
 }
 config_format = read_config_from_yaml(pytest_operation_name)
 print(f"Using config format of {config_format} to write configs.")
@@ -112,16 +116,20 @@ archive_file_with_timestamp(result_file)
 
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
-def gen_shape_detail_M():
-    return [2048, 1024]
+def gen_shape_detail_B():
+    return [64, 128]
 
 
-def gen_shape_detail_K():
-    return [2048, 512]
+def gen_shape_detail_H():
+    return [8, 16]
 
 
-def gen_shape_detail_N():
-    return [2048, 4096]
+def gen_shape_detail_L():
+    return [512, 1024]
+
+
+def gen_shape_detail_D():
+    return [64]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -133,78 +141,25 @@ def gen_shape_detail_N():
 # ===---------------------------------------------------------------------------------===
 
 
-def discretize_to_multiple(x, multiple):
-    return round(x / multiple) * multiple
-
-
 # Define functions to generate parameters
-def gen_BLOCK_M(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    block m: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
-    """
-    res = (
-        5.02754660e-5 * shape_detail_M
-        + 1.24650843e-05 * shape_detail_K
-        + 5.70746029e-05 * shape_detail_N
-        + 0.951953125
-    )
-    return 2 ** (round(res + 5))
+def gen_block_m(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
+    return 64
 
 
-def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    bolck k: -4.32182761e-05 1.28128949e-05 -4.64046703e-05 0.47832031249999984 5
-    """
-    res = (
-        -4.32182761e-05 * shape_detail_M
-        + 1.28128949e-05 * shape_detail_K
-        + -4.64046703e-05 * shape_detail_N
-        + 0.47832031249999984
-    )
-    return 2 ** (round(res + 5))
+def gen_block_n(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
+    return 32
 
 
-def gen_BLOCK_N(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    block n: 4.52714808e-05 -7.57329604e-06 3.63630407e-05 0.52656250 6
-    """
-    res = (
-        4.52714808e-05 * shape_detail_M
-        + -7.57329604e-06 * shape_detail_K
-        + 3.63630407e-05 * shape_detail_N
-        + 0.52656250
-    )
-    return 2 ** (round(res + 6))
+def gen_pre_load_v(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
+    return True
 
 
-def gen_SPLIT_K(shape_detail_M, shape_detail_N, shape_detail_K):
+def gen_warps(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
+    return 4
+
+
+def gen_stages(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
     return 1
-
-
-def gen_num_stages(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    num stages: -1.34748571e-05 -7.30402329e-06 -6.40644747e-06 1.0521484374999996 1
-    """
-    res = (
-        -1.34748571e-05 * shape_detail_M
-        + -7.30402329e-06 * shape_detail_K
-        + -6.40644747e-06 * shape_detail_N
-        + 1.0521484374999996
-    )
-    return 2 ** (round(res + 1))
-
-
-def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    num warps: -1.61563649e-05 2.72414264e-05 -2.95751235e-05 1.27919921875 1
-    """
-    res = (
-        -1.61563649e-05 * shape_detail_M
-        + 2.72414264e-05 * shape_detail_K
-        + -2.95751235e-05 * shape_detail_N
-        + 1.27919921875
-    )
-    return 2 ** (round(res + 1))
 
 
 # ===---------------------------------------------------------------------------------===
@@ -219,7 +174,8 @@ def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
 # ===---------------------------------------------------------------------------------===
 
 shapegen = ShapeGenerator(
-    excel_config, (gen_shape_detail_M, gen_shape_detail_K, gen_shape_detail_N)
+    excel_config,
+    (gen_shape_detail_B, gen_shape_detail_H, gen_shape_detail_L, gen_shape_detail_D),
 )
 
 # print(shapegen.generate())
@@ -228,7 +184,7 @@ shapegen = ShapeGenerator(
 
 tunedconfiggen = TunedConfigGenerator(
     excel_config,
-    (gen_BLOCK_M, gen_BLOCK_K, gen_BLOCK_N, gen_SPLIT_K, gen_num_stages, gen_num_warps),
+    (gen_block_m, gen_block_n, gen_pre_load_v, gen_warps, gen_stages),
     shapegen,
 )
 

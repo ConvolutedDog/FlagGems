@@ -4,7 +4,7 @@ import pandas as pd
 
 # ===================================
 input_log = "results/mm-result.txt"
-output_excel = "results/mm-result-eval-model-512-512-8192-vs-compile-nativeflag-4090-all-param-coverd-fangzhen.xlsx"
+output_excel = "results/mm-result-eval-model-512-512-8192-vs-compile-nativeflag-4090-all-param-coverd-fangzhen.csv"
 # ===================================
 
 f = open(input_log, "r")
@@ -100,6 +100,6 @@ for line in lines:
 
         df = pd.concat([df, pd.DataFrame(rows)], ignore_index=True)
 
-df.to_excel(output_excel, index=False)
+df.to_csv(output_excel, index=False)
 
 print("Written to " + output_excel)
