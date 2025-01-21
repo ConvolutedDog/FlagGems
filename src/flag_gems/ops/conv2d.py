@@ -4,6 +4,7 @@ import torch
 import triton
 import triton.language as tl
 
+from .. import runtime
 from ..utils import libentry
 
 
@@ -60,31 +61,32 @@ def conv2d_forward_config(
 
 @libentry()
 @triton.autotune(
-    configs=[
-        conv2d_forward_config(128, 32, 128, n_warps=2, num_stages=4),
-        conv2d_forward_config(256, 32, 64, n_warps=2, num_stages=4),
-        conv2d_forward_config(256, 32, 32, n_warps=2, num_stages=4),
-        conv2d_forward_config(256, 64, 32, n_warps=2, num_stages=4),
-        conv2d_forward_config(256, 64, 16, n_warps=2, num_stages=4),
-        conv2d_forward_config(256, 32, 16, n_warps=2, num_stages=4),
-        conv2d_forward_config(64, 32, 128, n_warps=2, num_stages=4),
-        conv2d_forward_config(128, 32, 64, n_warps=2, num_stages=4),
-        conv2d_forward_config(64, 32, 64, n_warps=2, num_stages=4),
-        conv2d_forward_config(128, 32, 16, n_warps=2, num_stages=4),
-        conv2d_forward_config(64, 128, 128, n_warps=2, num_stages=4),
-        conv2d_forward_config(128, 128, 64, n_warps=2, num_stages=4),
-        conv2d_forward_config(128, 64, 32, n_warps=2, num_stages=4),
-        conv2d_forward_config(64, 64, 64, n_warps=2, num_stages=4),
-        conv2d_forward_config(64, 16, 16, n_warps=2, num_stages=4),
-        conv2d_forward_config(256, 16, 16, n_warps=2, num_stages=4),
-        conv2d_forward_config(128, 16, 16, n_warps=2, num_stages=4),
-        conv2d_forward_config(32, 16, 16, n_warps=2, num_stages=4),
-        conv2d_forward_config(256, 16, 32, n_warps=2, num_stages=4),
-        conv2d_forward_config(128, 16, 32, n_warps=2, num_stages=4),
-        conv2d_forward_config(64, 64, 32, n_warps=2, num_stages=4),
-        conv2d_forward_config(64, 32, 32, n_warps=2, num_stages=4),
-        conv2d_forward_config(128, 32, 32, n_warps=2, num_stages=4),
-    ],
+    # configs=[
+    #     conv2d_forward_config(128, 32, 128, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(256, 32, 64, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(256, 32, 32, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(256, 64, 32, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(256, 64, 16, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(256, 32, 16, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(64, 32, 128, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(128, 32, 64, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(64, 32, 64, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(128, 32, 16, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(64, 128, 128, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(128, 128, 64, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(128, 64, 32, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(64, 64, 64, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(64, 16, 16, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(256, 16, 16, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(128, 16, 16, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(32, 16, 16, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(256, 16, 32, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(128, 16, 32, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(64, 64, 32, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(64, 32, 32, n_warps=2, num_stages=4),
+    #     conv2d_forward_config(128, 32, 32, n_warps=2, num_stages=4),
+    # ],
+    configs=runtime.get_tuned_config("conv2d"),
     key=[
         "in_n",
         "weight_c",
