@@ -88,7 +88,6 @@ def test_perf_conv2d():
         input_shape = (batch, input_c, input_h, input_w)
         weight_shape = (out_c, input_c // groups, kernel_h, kernel_w)
         input = torch.randn(size=input_shape, device=device, dtype=dtype)
-
         weight = torch.randn(size=weight_shape, device=device, dtype=dtype)
 
         yield {
