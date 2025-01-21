@@ -1171,12 +1171,17 @@ class Benchmark:
                         flag_gems.runtime.config_loader = (
                             flag_gems.runtime.ConfigLoader.reset_instance()
                         )
-                        importlib.reload(
-                            sys.modules[
-                                "flag_gems.ops."
-                                + opname_benchmark2tuneconfig[self.op_name]
-                            ]
-                        )
+                        if self.op_name in opname_benchmark2tuneconfig.keys():
+                            importlib.reload(
+                                sys.modules[
+                                    "flag_gems.ops."
+                                    + opname_benchmark2tuneconfig[self.op_name]
+                                ]
+                            )
+                        else:
+                            importlib.reload(
+                                sys.modules["flag_gems.ops." + self.op_name]
+                            )
                         if self.gems_op:
                             metric.latency_native_flaggems = self.get_latency(
                                 self.gems_op, *args, **kwargs
