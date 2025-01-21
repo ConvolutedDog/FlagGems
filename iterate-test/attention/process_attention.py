@@ -5,8 +5,7 @@ import pandas as pd
 # ===================================
 input_log = "results/attention-result.txt"
 output_excel = (
-    "results/attention-1_4_8_16_32_64-8_16_32_64-512_1024_2048-32_64_128-"
-    + "16_32_64_128-16_32_64_128-true_false-4_8-1_2_3-fixedshape-allcover-4090-1.csv"
+    "results/attention-eval-fixedshape-allcover-4090-withvstrainsetspeedup.csv"
 )
 # ===================================
 

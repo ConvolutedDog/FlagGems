@@ -29,8 +29,8 @@ pytest_operation_name = "attention"
 pytest_data_type = "float16"
 
 pytest_verbose = True
-pytest_warmup_runs = 3
-pytest_iter_runs = 3
+pytest_warmup_runs = 10
+pytest_iter_runs = 30
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -120,19 +120,23 @@ archive_file_with_timestamp(result_file)
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_B():
-    return [64, 128]
+    return [1, 4, 8, 16, 32, 64]
+    # return [24, 40, 48, 56]
 
 
 def gen_shape_detail_H():
-    return [8, 16]
+    return [8, 16, 32, 64]
+    # return [24, 40, 48, 56]
 
 
 def gen_shape_detail_L():
-    return [512, 1024]
+    return [512, 1024, 2048]
+    # return [512, 1024]
 
 
 def gen_shape_detail_D():
-    return [64]
+    return [32, 64, 128]
+    # return [32, 64]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -146,23 +150,63 @@ def gen_shape_detail_D():
 
 # Define functions to generate parameters
 def gen_block_m(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
-    return 64
+    # res = 0.0066405717512804*shape_detail_B + 0.00734747023809523*shape_detail_D + 0.0034621578099839*shape_detail_H + 0.000151134672619047*shape_detail_L
+    # return 2 ** (round(res + 5.2508455764377))
+    res = (
+        0.00683199967292153 * shape_detail_B
+        + 0.00936330104811068 * shape_detail_D
+        + 0.00448095972738805 * shape_detail_H
+        + 0.000148717188119298 * shape_detail_L
+    )
+    return 2 ** (round(res + 5.02875534230089))
 
 
 def gen_block_n(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
-    return 32
+    # res = -0.0086496205851233*shape_detail_B + -0.00179811507936508*shape_detail_D + -0.007085346215781*shape_detail_H + 0.000218951512896825*shape_detail_L
+    # return 2 ** (round(res + 5.33952007458942))
+    res = (
+        -0.0188492809138742 * shape_detail_B
+        + -0.000773963510128283 * shape_detail_D
+        + -0.00599468239382565 * shape_detail_H
+        + 0.000286142116806643**shape_detail_L
+    )
+    return 2 ** (round(res + 5.3864909959795))
 
 
 def gen_pre_load_v(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
-    return True
+    # res = -0.00223747121802199*shape_detail_B + -0.000453374954055956*shape_detail_D + -0.000317914402565846*shape_detail_H + -1.13343738513988e-6*shape_detail_L
+    # return 2 ** (round(res + 1.41904481901093)) - 1
+    res = (
+        -0.00148424365317821 * shape_detail_B
+        + -0.000116212846695584 * shape_detail_D
+        + 0.00542074895974272 * shape_detail_H
+        + 4.6115370774636e-5**shape_detail_L
+    )
+    return 2 ** (round(res + 0.623104826362066)) - 1
 
 
 def gen_warps(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
-    return 4
+    # res = -0.00277177335072994*shape_detail_B + 0.00403025793650793*shape_detail_D + -0.00181159420289855*shape_detail_H + 6.58792162698411e-5*shape_detail_L
+    # return 2 ** (round(res + 1.8528338449679))
+    res = (
+        -0.00459004156423515 * shape_detail_B
+        + 0.00610042249850166 * shape_detail_D
+        + -0.00125747752342906 * shape_detail_H
+        + 0.000211103162525124 * shape_detail_L
+    )
+    return 2 ** (round(res + 1.53158201642767))
 
 
 def gen_stages(shape_detail_B, shape_detail_H, shape_detail_L, shape_detail_D):
-    return 1
+    # res = -0.000644258794051397*shape_detail_B + -0.00108506944444444*shape_detail_D + -0.00159017713365539*shape_detail_H + -6.78168402777779e-5*shape_detail_L
+    # return 2 ** (round(res + 3.13520144629314))
+    res = (
+        -0.000330363298158426 * shape_detail_B
+        + -0.000494254736256258 * shape_detail_D
+        + 0.000679446965320056 * shape_detail_H
+        + -2.10789867187994e-5 * shape_detail_L
+    )
+    return round(res + 3.0216598676481)
 
 
 # ===---------------------------------------------------------------------------------===
