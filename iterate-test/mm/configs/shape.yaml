@@ -1,0 +1,4 @@
+MMBenchmark:
+  shape_desc: M, N, K
+  shapes:
+  - [2048, 2048, 2048]
