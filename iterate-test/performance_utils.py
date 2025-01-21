@@ -1440,10 +1440,10 @@ def archive_file_with_timestamp(file_path, archive_dir="archive"):
 class ShapeGenerator:
     """
     A template class to generate shape parameter combinations based on user-defined
-    functions.
+    functions and constraints.
     """
 
-    def __init__(self, excel_config, shape_generators):
+    def __init__(self, excel_config, shape_generators, shape_constraints=None):
         """
         Initialize the ShapeGenerator.
 
@@ -1451,10 +1451,16 @@ class ShapeGenerator:
             excel_config (dict): The configuration dictionary containing "shape_cols".
             shape_generators (tuple): A tuple of user-defined generator functions.
                                       Function names should follow the format `gen_<field_name>`.
+            shape_constraints (list): A list of constraint functions. Each function should
+                                      accept all fields in "shape_cols" as arguments and
+                                      return True or False.
         """
         self.shape_cols = excel_config["shape_cols"]
         self.shape_generators = shape_generators
         self._validate_generators()
+        self.shape_constraints = (
+            shape_constraints if shape_constraints is not None else []
+        )
 
     def _validate_generators(self):
         """
@@ -1503,7 +1509,10 @@ class ShapeGenerator:
             param_dict = {
                 key: value for key, value in zip(self.shape_cols, combination)
             }
-            combinations.append(param_dict)
+
+            # Apply constraints
+            if all(constraint(**param_dict) for constraint in self.shape_constraints):
+                combinations.append(param_dict)
 
         return combinations
 
