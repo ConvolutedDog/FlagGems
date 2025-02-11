@@ -1516,6 +1516,30 @@ class ShapeGenerator:
 
         return combinations
 
+    def generate_custom(self, custom_generator):
+        """
+        Generate shape parameter combinations using a custom generator function.
+
+        Args:
+            custom_generator (function): A function that returns a list of dictionaries,
+                                         where each dictionary represents a valid combination
+                                         of shape parameters.
+
+        Returns:
+            list: A list of dictionaries, where each dictionary represents a combination
+                  of shape parameters.
+        """
+        # Get all combinations from the custom generator
+        combinations = custom_generator()
+
+        # Apply constraints to filter valid combinations
+        valid_combinations = []
+        for param_dict in combinations:
+            if all(constraint(**param_dict) for constraint in self.shape_constraints):
+                valid_combinations.append(param_dict)
+
+        return valid_combinations
+
 
 class ConfigGenerator:
     """

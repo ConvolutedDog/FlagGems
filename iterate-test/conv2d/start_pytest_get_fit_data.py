@@ -44,6 +44,9 @@ pytest_iter_runs = 3
 
 filter_out_repeat_comb = True
 
+# Use real params form the real models.
+pytest_custom_generator = True
+
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
 
@@ -51,6 +54,8 @@ pytest_shape_file = "configs/shape.yaml"
 print_shape_config_combinations = False
 print_grouped_shape_config_combinations = False
 
+# Just don't edit this.
+pytest_constraint_real_conv_params = False
 
 # ===---------------------------------------------------------------------------------===
 # Configuration Dictionary for Reading Native Flaggems from Training Set
@@ -182,6 +187,67 @@ def gen_shape_detail_groups():
     return [1, 4, 8, 16, 32, 64]
 
 
+def read_params_from_cfg(folder_path):
+    """
+    Reads the parameters from all `.cfg` files in the folder and returns
+    the deduplicated list of parameters.
+    """
+    shapes = []
+
+    # Reverse all the *.cfg files in `folder_path`.
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".cfg"):
+            cfg_file_path = os.path.join(folder_path, filename)
+            with open(cfg_file_path, "r") as file:
+                # Skip the header of *.cfg.
+                next(file)
+                for line in file:
+                    # Parse each line.
+                    parts = line.strip().split(",")
+                    if len(parts) < 10:
+                        continue  # Maybe the format of some line is not right.
+
+                    # Extract the params of each real conv layer.
+                    input_h = int(parts[1])  # Hi
+                    input_w = int(parts[2])  # Wi
+                    input_c = int(parts[4])  # C
+                    out_c = int(parts[5])  # D
+                    kernel_h = int(parts[6])  # Kh
+                    kernel_w = int(parts[7])  # Kw
+                    stride = int(parts[8])  # S
+                    padding = int(parts[9])  # P
+
+                    for batch in [1, 4, 8, 16, 32]:
+                        for groups in [1]:
+                            shapes.append(
+                                {
+                                    "shape_detail_batch": batch,
+                                    "shape_detail_input_h": input_h,
+                                    "shape_detail_input_w": input_w,
+                                    "shape_detail_input_c": input_c,
+                                    "shape_detail_out_c": out_c,
+                                    "shape_detail_kernel_h": kernel_h,
+                                    "shape_detail_kernel_w": kernel_w,
+                                    "shape_detail_stride": stride,
+                                    "shape_detail_padding": padding,
+                                    "shape_detail_groups": groups,
+                                }
+                            )
+
+    return shapes
+
+
+cfg_folder_path = "./configs/Config/"
+
+
+def custom_generator():
+    """
+    A custom generator function that returns a list of parameter combinations.
+    """
+    params = read_params_from_cfg(cfg_folder_path)
+    return params
+
+
 def constraint_input_size_based_on_input_c(**kwargs):
     detail_input_c = kwargs["shape_detail_input_c"]
     input_h = kwargs["shape_detail_input_h"]
@@ -260,6 +326,97 @@ def constraint_padding_lt_input_size(**kwargs):
     )
 
 
+# Global variable to store parameters from all .cfg files
+global_cfg_params = None
+
+
+def load_cfg_params(folder_path):
+    """
+    Load parameters from all .cfg files in the folder and save them into a global variable.
+    """
+    global global_cfg_params
+    if global_cfg_params is not None:
+        return  # If already loaded, return directly
+
+    global_cfg_params = set()
+
+    # Traverse all .cfg files in the folder
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".cfg"):
+            cfg_file_path = os.path.join(folder_path, filename)
+            with open(cfg_file_path, "r") as file:
+                # Skip the header line
+                next(file)
+                for line in file:
+                    # Parse each line
+                    parts = line.strip().split(",")
+                    if len(parts) < 10:
+                        continue  # Skip lines with incorrect format
+
+                    # Extract parameters and save them into the global variable
+                    params = (
+                        int(parts[1]),  # Hi (input_h)
+                        int(parts[2]),  # Wi (input_w)
+                        int(parts[4]),  # C (input_c)
+                        int(parts[5]),  # D (out_c)
+                        int(parts[6]),  # Kh (kernel_h)
+                        int(parts[7]),  # Kw (kernel_w)
+                        int(parts[8]),  # S (stride)
+                        int(parts[9]),  # P (padding)
+                    )
+                    global_cfg_params.add(params)
+
+
+def check_params_in_global(
+    input_h, input_w, input_c, out_c, kernel_h, kernel_w, stride, padding
+):
+    """
+    Check if the input parameters exist in the global variable.
+    """
+    global global_cfg_params
+    if global_cfg_params is None:
+        raise ValueError("Global parameters not loaded. Call `load_cfg_params` first.")
+
+    # Check if the input parameters match any entry in the global set
+    return (
+        input_h,
+        input_w,
+        input_c,
+        out_c,
+        kernel_h,
+        kernel_w,
+        stride,
+        padding,
+    ) in global_cfg_params
+
+
+def constraint_null(**kwargs):
+    return True
+
+
+def constraint_real_conv_params(**kwargs):
+    """
+    Check if the input parameters match any real convolution layer in the .cfg files.
+    """
+
+    load_cfg_params(cfg_folder_path)  # Load parameters from .cfg files
+
+    # Extract input parameters
+    input_c = kwargs["shape_detail_input_c"]
+    out_c = kwargs["shape_detail_out_c"]
+    input_h = kwargs["shape_detail_input_h"]
+    input_w = kwargs["shape_detail_input_w"]
+    kernel_h = kwargs["shape_detail_kernel_h"]
+    kernel_w = kwargs["shape_detail_kernel_w"]
+    stride = kwargs["shape_detail_stride"]
+    padding = kwargs["shape_detail_padding"]
+
+    # Check if the parameters exist in the global variable
+    return check_params_in_global(
+        input_h, input_w, input_c, out_c, kernel_h, kernel_w, stride, padding
+    )
+
+
 def gen_BLOCK_NI_HO_WO():
     return [32, 64, 128, 256]
 
@@ -316,6 +473,9 @@ shapegen = ShapeGenerator(
         constraint_groups_le_input_and_output_c,
         constraint_padding_lt_input_size,
         constraint_output_c_divisible_by_groups,
+        constraint_real_conv_params
+        if pytest_constraint_real_conv_params
+        else constraint_null,
     ),
 )
 configgen = ConfigGenerator(
@@ -324,7 +484,9 @@ configgen = ConfigGenerator(
 )
 
 shape_config_combinations = list(
-    itertools.product(shapegen.generate(), configgen.generate())
+    itertools.product(shapegen.generate_custom(custom_generator), configgen.generate())
+    if pytest_custom_generator
+    else itertools.product(shapegen.generate(), configgen.generate())
 )
 
 
