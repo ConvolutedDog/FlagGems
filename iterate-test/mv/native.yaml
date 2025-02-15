@@ -1,0 +1,16 @@
+mv:
+- gen: true
+  param_map:
+    META:
+      BLOCK_M: block_m
+      BLOCK_N: block_n
+    num_warps: warps
+    num_stages: stages
+  warps:
+  - 8
+  block_m:
+  - 32
+  block_n:
+  - 16
+  stages:
+  - 3
