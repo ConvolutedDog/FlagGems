@@ -4,7 +4,7 @@ import pandas as pd
 
 # ===================================
 input_log = "results/mean-result.txt"
-output_excel = "results/mean-result-512-512-8192.csv"
+output_excel = "results/mean-result-512-512-524288.csv"
 # ===================================
 
 f = open(input_log, "r")
@@ -20,10 +20,10 @@ df = pd.DataFrame(
         "block_m",
         "block_n",
         "warps",
-        "stages",
         "legacy_shape",
         "shape_detail_M",
         "shape_detail_N",
+        "shape_detail_K",
         "latency_base",
         "latency",
         "gbps_base",
@@ -63,12 +63,12 @@ for line in lines:
                 "mode": data["mode"],
                 "level": data["level"],
                 "block_m": autotune_configs["block_m"],
-                "block_n": autotune_configs["block_n"],
-                "warps": autotune_configs["warps"],
-                "stages": autotune_configs["stages"],
+                "block_n": autotune_configs["BLOCK_N"],
+                "warps": autotune_configs["num_warps"],
                 "legacy_shape": result["legacy_shape"],
                 "shape_detail_M": shape_detail[0][0],
                 "shape_detail_N": shape_detail[0][1],
+                "shape_detail_K": shape_detail[0][2],
                 "latency_base": result["latency_base"],
                 "latency": result["latency"],
                 "gbps_base": result["gbps_base"],
