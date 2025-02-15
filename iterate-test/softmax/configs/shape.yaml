@@ -1,0 +1,4 @@
+SOFTMAXBenchmark:
+  shape_desc: M, N, K
+  shapes:
+  - [1, 1048576, 1]

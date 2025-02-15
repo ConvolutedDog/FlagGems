@@ -1,0 +1,13 @@
+softmax:
+- META:
+    TILE_K: 32
+- META:
+    TILE_K: 64
+- META:
+    TILE_K: 128
+- META:
+    TILE_K: 256
+- META:
+    TILE_K: 512
+- META:
+    TILE_K: 1024
