@@ -1,0 +1,4 @@
+RANDPERMBenchmark:
+  shape_desc: M
+  shapes:
+  - [2048]

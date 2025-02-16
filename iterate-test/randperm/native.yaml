@@ -1,0 +1,9 @@
+randperm:
+- gen: true
+  param_map:
+    META: {}
+    num_warps: warps
+  warps:
+  - 4
+  - 8
+  - 16
