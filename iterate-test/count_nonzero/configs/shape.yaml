@@ -1,0 +1,4 @@
+COUNTNONZEROBenchmark:
+  shape_desc: M, N
+  shapes:
+  - [2048, 2048]

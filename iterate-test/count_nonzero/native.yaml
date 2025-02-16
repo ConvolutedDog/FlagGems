@@ -1,0 +1,12 @@
+count_nonzero:
+- gen : true
+  param_map:
+    META:
+      BLOCK_SIZE: block_m
+    num_warps: warps
+  block_m:
+    - 1024
+    - 2048
+    - 4096
+  warps:
+    - 4
