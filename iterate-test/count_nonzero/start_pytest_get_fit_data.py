@@ -128,13 +128,11 @@ archive_file_with_timestamp(result_file)
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_M():
-    # return list(range(512, 8192 + 1, 512))
-    return [2048]
+    return list(range(512, 8192 + 1, 512))
 
 
 def gen_shape_detail_N():
-    # return list(range(512, 8192 + 1, 512))
-    return [2048]
+    return list(range(512, 8192 + 1, 512))
 
 
 def gen_block_m():
