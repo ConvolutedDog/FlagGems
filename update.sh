@@ -3,18 +3,12 @@
 # Define the base directory and instance list
 IterTests_HOME=/home/yangjianchao/Github/FlagGems-IterTests
 DEV=/home/yangjianchao/Github/FlagGems-dev
-# Instances=(
-#     "FlagGems-4090-1" \
-#     "FlagGems-4090-2" \
-#     "FlagGems-4090-3" \
-#     "FlagGems-H100-0" \
-#     "FlagGems-V100-4"
-# )
 Instances=(
     "FlagGems-4090-1" \
     "FlagGems-4090-2" \
     "FlagGems-4090-3" \
-    "FlagGems-H100-0"
+    "FlagGems-H100-0" \
+    "FlagGems-V100-4"
 )
 
 # Loop through each instance
