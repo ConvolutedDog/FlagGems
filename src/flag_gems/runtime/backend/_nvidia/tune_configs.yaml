@@ -784,11 +784,11 @@ count_nonzero:
       BLOCK_SIZE: block_m
     num_warps: warps
   block_m:
-    - 1024
-    - 2048
-    - 4096
+  - 1024
+  - 2048
+  - 4096
   warps:
-    - 4
+  - 4
 cross_entropy_loss_sum_and_scale:
 - gen: true
   param_map:
