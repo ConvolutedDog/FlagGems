@@ -61,7 +61,7 @@ for line in lines:
                 "mode": data["mode"],
                 "level": data["level"],
                 "block_m": autotune_configs["block_m"],
-                "warps": autotune_configs["num_warps"],
+                "warps": autotune_configs["warps"],
                 "legacy_shape": result["legacy_shape"],
                 "shape_detail_M": shape_detail[0][0],
                 "shape_detail_N": shape_detail[0][1],
