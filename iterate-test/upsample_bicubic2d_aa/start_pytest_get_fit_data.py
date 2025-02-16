@@ -34,7 +34,7 @@ import flag_gems
 # User-Specified Parameters
 # ===---------------------------------------------------------------------------------===
 
-pytest_operation_name = "upsample_nearest2d"
+pytest_operation_name = "upsample_bicubic2d_aa"
 # Optional["float16", "float32", "bfloat16", "int16", "int32", "bool", "cfloat"]
 pytest_data_type = "float16"
 
@@ -83,11 +83,11 @@ excel_config = {
         "shape_detail_W",
     ],
     # Auto-tune configs.
-    "config_cols": ["block_n", "warps"],
+    "config_cols": ["block_x", "block_y", "warps"],
     # Performance.
     "latency_col": "latency",
     # Benchmark name of shape yaml.
-    "bench_name": "UPSAMPLENEAREST2DBenchmark",
+    "bench_name": "UPSAMPLEBICUBIC2DAABenchmark",
     # Shape description of shape yaml. It should correspond one-to-one with "shape_cols".
     "shape_desc": ["N", "C", "H", "W"],
 }
@@ -275,12 +275,19 @@ def constraint_real_conv_params(**kwargs):
     return check_params_in_global(input_h, input_w, input_c)
 
 
-def gen_block_n():
-    return [256, 512, 1024, 2048, 4096]
+def gen_block_x():
+    # return [16, 32, 64, 128, 256, 512, 1024, 2048]
+    return [16, 32]
+
+
+def gen_block_y():
+    # return [1, 2, 4, 8]
+    return [2, 4]
 
 
 def gen_warps():
-    return [2, 4, 8, 16]
+    # return [2, 4, 8, 16]
+    return [2, 4]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -305,7 +312,7 @@ shapegen = ShapeGenerator(
 )
 configgen = ConfigGenerator(
     excel_config,
-    (gen_block_n, gen_warps),
+    (gen_block_x, gen_block_y, gen_warps),
 )
 
 shape_config_combinations = list(

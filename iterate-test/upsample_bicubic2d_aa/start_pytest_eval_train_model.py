@@ -1,5 +1,4 @@
 import importlib
-import itertools
 import os
 import subprocess
 import sys
@@ -7,25 +6,16 @@ from collections import defaultdict
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import attri_util
 from performance_utils import (
-    ConfigGenerator,
     ShapeGenerator,
+    TunedConfigGenerator,
     archive_file_with_timestamp,
-    convert_to_tuple,
-    have_itered_shape_config_pairs,
     print_centered_label,
     read_config_from_yaml,
-    read_native_flaggems_from_trainset,
     run_perf_pytest,
-    stringDtype2TorchDtype,
     write_config_to_yaml,
     write_shapes_to_yaml,
 )
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.abspath(os.path.join(current_dir, "../../src"))
-sys.path.append(src_dir)
 
 # flake8: noqa: E402
 import flag_gems
@@ -34,7 +24,7 @@ import flag_gems
 # User-Specified Parameters
 # ===---------------------------------------------------------------------------------===
 
-pytest_operation_name = "upsample_nearest2d"
+pytest_operation_name = "upsample_bicubic2d_aa"
 # Optional["float16", "float32", "bfloat16", "int16", "int32", "bool", "cfloat"]
 pytest_data_type = "float16"
 
@@ -42,20 +32,13 @@ pytest_verbose = True
 pytest_warmup_runs = 3
 pytest_iter_runs = 3
 
-filter_out_repeat_comb = True
-
-# Use real params form the real models.
-pytest_custom_generator = True
-
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
 
 # Just don't edit this.
-print_shape_config_combinations = False
+print_shape_config_combinations = True
 print_grouped_shape_config_combinations = False
 
-# Just don't edit this.
-pytest_constraint_real_conv_params = False
 
 # ===---------------------------------------------------------------------------------===
 # Configuration Dictionary for Reading Native Flaggems from Training Set
@@ -83,18 +66,14 @@ excel_config = {
         "shape_detail_W",
     ],
     # Auto-tune configs.
-    "config_cols": ["block_n", "warps"],
+    "config_cols": ["block_x", "block_y", "warps"],
     # Performance.
     "latency_col": "latency",
     # Benchmark name of shape yaml.
-    "bench_name": "UPSAMPLENEAREST2DBenchmark",
+    "bench_name": "UPSAMPLEBICUBIC2DAABenchmark",
     # Shape description of shape yaml. It should correspond one-to-one with "shape_cols".
     "shape_desc": ["N", "C", "H", "W"],
 }
-if filter_out_repeat_comb:
-    read_native_flaggems_from_trainset(
-        tarinSetPath="./train-set", datatype=pytest_data_type, config=excel_config
-    )
 config_format = read_config_from_yaml(pytest_operation_name)
 print(f"Using config format of {config_format} to write configs.")
 
@@ -121,7 +100,7 @@ archive_file_with_timestamp(result_file)
 
 
 # ===---------------------------------------------------------------------------------===
-# Shape and Configuration Parameter Generator Functions
+# Shape Generator Functions
 # ===---------------------------------------------------------------------------------===
 # This section contains functions that generate various parameters for shape details and
 # configuration options. These parameters are used to create different configurations for
@@ -154,129 +133,22 @@ def gen_shape_detail_W():
     return [224]
 
 
-def read_params_from_cfg(folder_path):
-    """
-    Reads the parameters from all `.cfg` files in the folder and returns
-    the deduplicated list of parameters.
-    """
-    shapes = []
-
-    # Reverse all the *.cfg files in `folder_path`.
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".cfg"):
-            cfg_file_path = os.path.join(folder_path, filename)
-            with open(cfg_file_path, "r") as file:
-                # Skip the header of *.cfg.
-                next(file)
-                for line in file:
-                    # Parse each line.
-                    parts = line.strip().split(",")
-                    if len(parts) < 10:
-                        continue  # Maybe the format of some line is not right.
-
-                    # Extract the params of each real conv layer.
-                    input_h = int(parts[1])  # Hi
-                    input_w = int(parts[2])  # Wi
-                    input_c = int(parts[5])  # C
-
-                    for batch in [1, 4, 8, 16, 32]:
-                        shapes.append(
-                            {
-                                "shape_detail_N": batch,
-                                "shape_detail_H": input_h,
-                                "shape_detail_W": input_w,
-                                "shape_detail_C": input_c,
-                            }
-                        )
-
-    return shapes
+# ===---------------------------------------------------------------------------------===
+# Configuration Parameter Generation Functions
+# ===---------------------------------------------------------------------------------===
+# This section contains functions to generate configuration parameters (e.g., block sizes,
+# split factors, number of stages, etc.) based on input shapes (M, K, N). These functions
+# use predefined formulas to calculate optimal values for each parameter.
+# ===---------------------------------------------------------------------------------===
 
 
-cfg_folder_path = "./configs/Config/"
+# Define functions to generate parameters
+def gen_block_x():
+    return [16, 32, 64, 128, 256, 512, 1024, 2048]
 
 
-def custom_generator():
-    """
-    A custom generator function that returns a list of parameter combinations.
-    """
-    params = read_params_from_cfg(cfg_folder_path)
-    return params
-
-
-# Global variable to store parameters from all .cfg files
-global_cfg_params = None
-
-
-def load_cfg_params(folder_path):
-    """
-    Load parameters from all .cfg files in the folder and save them into a global variable.
-    """
-    global global_cfg_params
-    if global_cfg_params is not None:
-        return  # If already loaded, return directly
-
-    global_cfg_params = set()
-
-    # Traverse all .cfg files in the folder
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".cfg"):
-            cfg_file_path = os.path.join(folder_path, filename)
-            with open(cfg_file_path, "r") as file:
-                # Skip the header line
-                next(file)
-                for line in file:
-                    # Parse each line
-                    parts = line.strip().split(",")
-                    if len(parts) < 10:
-                        continue  # Skip lines with incorrect format
-
-                    # Extract parameters and save them into the global variable
-                    params = (
-                        int(parts[1]),  # Hi (input_h)
-                        int(parts[2]),  # Wi (input_w)
-                        int(parts[4]),  # C (input_c)
-                    )
-                    global_cfg_params.add(params)
-
-
-def check_params_in_global(input_h, input_w, input_c):
-    """
-    Check if the input parameters exist in the global variable.
-    """
-    global global_cfg_params
-    if global_cfg_params is None:
-        raise ValueError("Global parameters not loaded. Call `load_cfg_params` first.")
-
-    # Check if the input parameters match any entry in the global set
-    return (
-        input_h,
-        input_w,
-        input_c,
-    ) in global_cfg_params
-
-
-def constraint_null(**kwargs):
-    return True
-
-
-def constraint_real_conv_params(**kwargs):
-    """
-    Check if the input parameters match any real convolution layer in the .cfg files.
-    """
-
-    load_cfg_params(cfg_folder_path)  # Load parameters from .cfg files
-
-    # Extract input parameters
-    input_c = kwargs["shape_detail_C"]
-    input_h = kwargs["shape_detail_H"]
-    input_w = kwargs["shape_detail_W"]
-
-    # Check if the parameters exist in the global variable
-    return check_params_in_global(input_h, input_w, input_c)
-
-
-def gen_block_n():
-    return [256, 512, 1024, 2048, 4096]
+def gen_block_y():
+    return [1, 2, 4, 8]
 
 
 def gen_warps():
@@ -297,41 +169,19 @@ def gen_warps():
 shapegen = ShapeGenerator(
     excel_config,
     (gen_shape_detail_N, gen_shape_detail_C, gen_shape_detail_H, gen_shape_detail_W),
-    (
-        constraint_real_conv_params
-        if pytest_constraint_real_conv_params
-        else constraint_null,
-    ),
 )
-configgen = ConfigGenerator(
+
+# print(shapegen.generate())
+# for kv in shapegen.generate():
+#     print(kv)
+
+tunedconfiggen = TunedConfigGenerator(
     excel_config,
-    (gen_block_n, gen_warps),
+    (gen_block_x, gen_block_y, gen_warps),
+    shapegen,
 )
 
-shape_config_combinations = list(
-    itertools.product(shapegen.generate_custom(custom_generator), configgen.generate())
-    if pytest_custom_generator
-    else itertools.product(shapegen.generate(), configgen.generate())
-)
-
-
-# ===---------------------------------------------------------------------------------===
-# Filter Out Already Iterated Shape-Config Combinations
-# ===---------------------------------------------------------------------------------===
-# This section filters out shape-config combinations that have already been traversed and
-# stored in `have_itered_shape_config_pairs`.
-# ===---------------------------------------------------------------------------------===
-
-# Filter out combinations that have already been traversed
-if filter_out_repeat_comb:
-    shape_config_combinations = [
-        pair
-        for pair in shape_config_combinations
-        if convert_to_tuple(
-            pair, excel_config, stringDtype2TorchDtype(pytest_data_type)
-        )
-        not in have_itered_shape_config_pairs
-    ]
+shape_config_combinations = tunedconfiggen.generate()
 
 if print_shape_config_combinations:
     for shape, config in shape_config_combinations:
