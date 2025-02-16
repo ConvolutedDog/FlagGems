@@ -276,18 +276,15 @@ def constraint_real_conv_params(**kwargs):
 
 
 def gen_block_x():
-    # return [16, 32, 64, 128, 256, 512, 1024, 2048]
-    return [16, 32]
+    return [16, 32, 64, 128, 256, 512, 1024, 2048]
 
 
 def gen_block_y():
-    # return [1, 2, 4, 8]
-    return [2, 4]
+    return [1, 2, 4, 8]
 
 
 def gen_warps():
-    # return [2, 4, 8, 16]
-    return [2, 4]
+    return [2, 4, 8, 16]
 
 
 # ===---------------------------------------------------------------------------------===
