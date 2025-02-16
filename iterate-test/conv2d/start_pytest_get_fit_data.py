@@ -210,12 +210,12 @@ def read_params_from_cfg(folder_path):
                     # Extract the params of each real conv layer.
                     input_h = int(parts[1])  # Hi
                     input_w = int(parts[2])  # Wi
-                    input_c = int(parts[4])  # C
-                    out_c = int(parts[5])  # D
-                    kernel_h = int(parts[6])  # Kh
-                    kernel_w = int(parts[7])  # Kw
-                    stride = int(parts[8])  # S
-                    padding = int(parts[9])  # P
+                    input_c = int(parts[5])  # C
+                    out_c = int(parts[6])  # D
+                    kernel_h = int(parts[7])  # Kh
+                    kernel_w = int(parts[8])  # Kw
+                    stride = int(parts[9])  # S
+                    padding = int(parts[10])  # P
 
                     for batch in [1, 4, 8, 16, 32]:
                         for groups in [1]:
@@ -357,12 +357,12 @@ def load_cfg_params(folder_path):
                     params = (
                         int(parts[1]),  # Hi (input_h)
                         int(parts[2]),  # Wi (input_w)
-                        int(parts[4]),  # C (input_c)
-                        int(parts[5]),  # D (out_c)
-                        int(parts[6]),  # Kh (kernel_h)
-                        int(parts[7]),  # Kw (kernel_w)
-                        int(parts[8]),  # S (stride)
-                        int(parts[9]),  # P (padding)
+                        int(parts[5]),  # C (input_c)
+                        int(parts[6]),  # D (out_c)
+                        int(parts[7]),  # Kh (kernel_h)
+                        int(parts[8]),  # Kw (kernel_w)
+                        int(parts[9]),  # S (stride)
+                        int(parts[10]),  # P (padding)
                     )
                     global_cfg_params.add(params)
 
