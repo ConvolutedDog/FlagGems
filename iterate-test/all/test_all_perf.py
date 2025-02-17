@@ -101,7 +101,7 @@ def all_input_fn(shape, cur_dtype, device):
         ),
     ],
 )
-def test_count_nonzero_benchmark(op_name, torch_op, input_fn):
+def test_all_benchmark(op_name, torch_op, input_fn):
     bench = ALLBenchmark(
         # input_fn=input_fn,
         op_name=op_name,
