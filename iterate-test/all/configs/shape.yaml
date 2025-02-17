@@ -1,0 +1,4 @@
+ALLBenchmark:
+  shape_desc: N, C, H, W
+  shapes:
+  - [16, 3, 224, 224]
