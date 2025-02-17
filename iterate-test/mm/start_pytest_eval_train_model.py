@@ -29,8 +29,8 @@ pytest_operation_name = "mm"
 pytest_data_type = "float16"
 
 pytest_verbose = True
-pytest_warmup_runs = 3
-pytest_iter_runs = 3
+pytest_warmup_runs = 10
+pytest_iter_runs = 30
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -116,15 +116,22 @@ archive_file_with_timestamp(result_file)
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_M():
-    return [2048, 1024]
+    return list(range(512, 8192 + 1, 512))
 
 
 def gen_shape_detail_K():
-    return [2048, 512]
+    return list(range(512, 8192 + 1, 512))
 
 
 def gen_shape_detail_N():
-    return [2048, 4096]
+    return list(range(512, 8192 + 1, 512))
+
+
+def constraint_MNK_equal(**kwargs):
+    M = kwargs["shape_detail_M"]
+    N = kwargs["shape_detail_N"]
+    K = kwargs["shape_detail_K"]
+    return M == N and N == K
 
 
 # ===---------------------------------------------------------------------------------===
@@ -140,74 +147,159 @@ def discretize_to_multiple(x, multiple):
     return round(x / multiple) * multiple
 
 
-# Define functions to generate parameters
+# # Define functions to generate parameters
+# def gen_BLOCK_M(shape_detail_M, shape_detail_N, shape_detail_K):
+#     """
+#     block m: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
+#     """
+#     res = (
+#         5.02754660e-5 * shape_detail_M
+#         + 1.24650843e-05 * shape_detail_K
+#         + 5.70746029e-05 * shape_detail_N
+#         + 0.951953125
+#     )
+#     return 2 ** (round(res + 5))
+
+
+# def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
+#     """
+#     bolck k: -4.32182761e-05 1.28128949e-05 -4.64046703e-05 0.47832031249999984 5
+#     """
+#     res = (
+#         -4.32182761e-05 * shape_detail_M
+#         + 1.28128949e-05 * shape_detail_K
+#         + -4.64046703e-05 * shape_detail_N
+#         + 0.47832031249999984
+#     )
+#     return 2 ** (round(res + 5))
+
+
+# def gen_BLOCK_N(shape_detail_M, shape_detail_N, shape_detail_K):
+#     """
+#     block n: 4.52714808e-05 -7.57329604e-06 3.63630407e-05 0.52656250 6
+#     """
+#     res = (
+#         4.52714808e-05 * shape_detail_M
+#         + -7.57329604e-06 * shape_detail_K
+#         + 3.63630407e-05 * shape_detail_N
+#         + 0.52656250
+#     )
+#     return 2 ** (round(res + 6))
+
+
+# def gen_SPLIT_K(shape_detail_M, shape_detail_N, shape_detail_K):
+#     return 1
+
+
+# def gen_num_stages(shape_detail_M, shape_detail_N, shape_detail_K):
+#     """
+#     num stages: -1.34748571e-05 -7.30402329e-06 -6.40644747e-06 1.0521484374999996 1
+#     """
+#     res = (
+#         -1.34748571e-05 * shape_detail_M
+#         + -7.30402329e-06 * shape_detail_K
+#         + -6.40644747e-06 * shape_detail_N
+#         + 1.0521484374999996
+#     )
+#     return 2 ** (round(res + 1))
+
+
+# def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
+#     """
+#     num warps: -1.61563649e-05 2.72414264e-05 -2.95751235e-05 1.27919921875 1
+#     """
+#     res = (
+#         -1.61563649e-05 * shape_detail_M
+#         + 2.72414264e-05 * shape_detail_K
+#         + -2.95751235e-05 * shape_detail_N
+#         + 1.27919921875
+#     )
+#     return 2 ** (round(res + 1))
+
+
 def gen_BLOCK_M(shape_detail_M, shape_detail_N, shape_detail_K):
     """
-    block m: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
+    def gen_BLOCK_M(shape_detail_M, shape_detail_N, shape_detail_K):
+            res = 0.00331313189338235*shape_detail_K + 0.00383588005514706*shape_detail_M + 0.00230210248161765*shape_detail_N + 54.0875
     """
     res = (
-        5.02754660e-5 * shape_detail_M
-        + 1.24650843e-05 * shape_detail_K
-        + 5.70746029e-05 * shape_detail_N
-        + 0.951953125
+        0.00331313189338235 * shape_detail_K
+        + 0.00383588005514706 * shape_detail_M
+        + 0.00230210248161765 * shape_detail_N
+        + 54.0875
     )
-    return 2 ** (round(res + 5))
-
-
-def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    bolck k: -4.32182761e-05 1.28128949e-05 -4.64046703e-05 0.47832031249999984 5
-    """
-    res = (
-        -4.32182761e-05 * shape_detail_M
-        + 1.28128949e-05 * shape_detail_K
-        + -4.64046703e-05 * shape_detail_N
-        + 0.47832031249999984
-    )
-    return 2 ** (round(res + 5))
+    trainsets = [32, 64, 128, 256]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
 
 
 def gen_BLOCK_N(shape_detail_M, shape_detail_N, shape_detail_K):
     """
-    block n: 4.52714808e-05 -7.57329604e-06 3.63630407e-05 0.52656250 6
+    def gen_BLOCK_N(shape_detail_M, shape_detail_N, shape_detail_K):
+            res = -0.00102467256433823*shape_detail_K + 0.00125732421875*shape_detail_M + 0.00430908203124999*shape_detail_N + 110.90625
     """
     res = (
-        4.52714808e-05 * shape_detail_M
-        + -7.57329604e-06 * shape_detail_K
-        + 3.63630407e-05 * shape_detail_N
-        + 0.52656250
+        -0.00102467256433823 * shape_detail_K
+        + 0.00125732421875 * shape_detail_M
+        + 0.00430908203124999 * shape_detail_N
+        + 110.90625
     )
-    return 2 ** (round(res + 6))
+    trainsets = [32, 64, 128, 256]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
+
+
+def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
+    """
+    def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
+            res = 0.000849106732536766*shape_detail_K - 0.00174524643841912*shape_detail_M - 0.00165477079503677*shape_detail_N + 49.46875
+    """
+    res = (
+        0.000849106732536766 * shape_detail_K
+        + -0.00174524643841912 * shape_detail_M
+        + -0.00165477079503677 * shape_detail_N
+        + 49.46875
+    )
+    trainsets = [32, 64, 128]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
 
 
 def gen_SPLIT_K(shape_detail_M, shape_detail_N, shape_detail_K):
-    return 1
+    res = 1
+    return res
 
 
 def gen_num_stages(shape_detail_M, shape_detail_N, shape_detail_K):
     """
-    num stages: -1.34748571e-05 -7.30402329e-06 -6.40644747e-06 1.0521484374999996 1
+    def gen_num_stages(shape_detail_M, shape_detail_N, shape_detail_K):
+            res = 2.89468204273897e-5*shape_detail_K - 1.64480770335478e-5*shape_detail_M - 4.78183521943934e-5*shape_detail_N + 3.699609375
     """
     res = (
-        -1.34748571e-05 * shape_detail_M
-        + -7.30402329e-06 * shape_detail_K
-        + -6.40644747e-06 * shape_detail_N
-        + 1.0521484374999996
+        2.89468204273897e-5 * shape_detail_K
+        + -1.64480770335478e-5 * shape_detail_M
+        + -4.78183521943934e-5 * shape_detail_N
+        + 3.699609375
     )
-    return 2 ** (round(res + 1))
+    trainsets = [2, 3, 4, 5]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
 
 
 def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
     """
-    num warps: -1.61563649e-05 2.72414264e-05 -2.95751235e-05 1.27919921875 1
+    def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
+            res = 0.000163044649011948*shape_detail_K - 0.000185125014361214*shape_detail_M - 0.000130238252527574*shape_detail_N + 5.8279296875
     """
     res = (
-        -1.61563649e-05 * shape_detail_M
-        + 2.72414264e-05 * shape_detail_K
-        + -2.95751235e-05 * shape_detail_N
-        + 1.27919921875
+        0.000163044649011948 * shape_detail_K
+        + -0.000185125014361214 * shape_detail_M
+        + -0.000130238252527574 * shape_detail_N
+        + 5.8279296875
     )
-    return 2 ** (round(res + 1))
+    trainsets = [2, 4]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
 
 
 # ===---------------------------------------------------------------------------------===
@@ -222,7 +314,11 @@ def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
 # ===---------------------------------------------------------------------------------===
 
 shapegen = ShapeGenerator(
-    excel_config, (gen_shape_detail_M, gen_shape_detail_K, gen_shape_detail_N)
+    excel_config,
+    (gen_shape_detail_M, gen_shape_detail_K, gen_shape_detail_N),
+    [
+        constraint_MNK_equal,
+    ],
 )
 
 # print(shapegen.generate())

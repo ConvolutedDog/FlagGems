@@ -114,11 +114,17 @@ archive_file_with_timestamp(result_file)
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_M():
-    return [2048, 1024]
+    return list(range(512, 8192 + 1, 512))
 
 
 def gen_shape_detail_N():
-    return [2048, 4096]
+    return list(range(512, 8192 + 1, 512))
+
+
+def constraint_MN_equal(**kwargs):
+    M = kwargs["shape_detail_M"]
+    N = kwargs["shape_detail_N"]
+    return M == N
 
 
 # ===---------------------------------------------------------------------------------===
@@ -133,42 +139,62 @@ def gen_shape_detail_N():
 # Define functions to generate parameters
 def gen_block_m(shape_detail_M, shape_detail_N):
     """
-    block m: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
+    def gen_block_m(shape_detail_M, shape_detail_N):
+            res = -0.000229779411764706*shape_detail_M + 0.000344669117647059*shape_detail_N + 63.0
     """
-    res = 5.02754660e-5 * shape_detail_M + 5.70746029e-05 * shape_detail_N + 0.951953125
-    return 2 ** (round(res + 5))
+    res = (
+        -0.000229779411764706 * shape_detail_M
+        + 0.000344669117647059 * shape_detail_N
+        + 63.0
+    )
+    trainsets = [16, 32, 64]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
 
 
 def gen_block_n(shape_detail_M, shape_detail_N):
     """
-    block n: 4.52714808e-05 -7.57329604e-06 3.63630407e-05 0.52656250 6
+    def gen_block_n(shape_detail_M, shape_detail_N):
+            res = 6.31893382352941e-5*shape_detail_M - 8.61672794117647e-5*shape_detail_N + 16.225
     """
-    res = 4.52714808e-05 * shape_detail_M + 3.63630407e-05 * shape_detail_N + 0.52656250
-    return 2 ** (round(res + 6))
+    res = (
+        6.31893382352941e-5 * shape_detail_M
+        + -8.61672794117647e-5 * shape_detail_N
+        + 16.225
+    )
+    trainsets = [16, 32, 64]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
 
 
 def gen_warps(shape_detail_M, shape_detail_N):
     """
-    num warps: -1.61563649e-05 2.72414264e-05 -2.95751235e-05 1.27919921875 1
+    def gen_warps(shape_detail_M, shape_detail_N):
+            res = -1.29250919117647e-5*shape_detail_M + 2.15418198529412e-5*shape_detail_N + 7.93125
     """
     res = (
-        -1.61563649e-05 * shape_detail_M
-        + -2.95751235e-05 * shape_detail_N
-        + 1.27919921875
+        -1.29250919117647e-5 * shape_detail_M
+        + 2.15418198529412e-5 * shape_detail_N
+        + 7.93125
     )
-    return 2 ** (round(res + 1))
+    trainsets = [1, 4, 8]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
 
 
 def gen_stages(shape_detail_M, shape_detail_N):
     """
-    num stages: -1.34748571e-05 -7.30402329e-06 -6.40644747e-06 1.0521484374999996 1
+    ef gen_stages(shape_detail_M, shape_detail_N):
+            res = 3.9493336397059e-6*shape_detail_M - 9.33478860294117e-6*shape_detail_N + 1.8359375
     """
     res = (
-        -1.34748571e-05 * shape_detail_M
-        + -6.40644747e-06 * shape_detail_N
-        + 1.0521484374999996
+        3.9493336397059e-6 * shape_detail_M
+        + -9.33478860294117e-6 * shape_detail_N
+        + 1.8359375
     )
-    return 2 ** (round(res + 1))
+    trainsets = [1, 2, 3]
+    closest_value = min(trainsets, key=lambda x: abs(x - res))
+    return closest_value
 
 
 # ===---------------------------------------------------------------------------------===
@@ -182,7 +208,13 @@ def gen_stages(shape_detail_M, shape_detail_N):
 # previously evaluated combinations.
 # ===---------------------------------------------------------------------------------===
 
-shapegen = ShapeGenerator(excel_config, (gen_shape_detail_M, gen_shape_detail_N))
+shapegen = ShapeGenerator(
+    excel_config,
+    (gen_shape_detail_M, gen_shape_detail_N),
+    [
+        constraint_MN_equal,
+    ],
+)
 
 # print(shapegen.generate())
 # for kv in shapegen.generate():
