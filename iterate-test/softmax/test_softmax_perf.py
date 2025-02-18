@@ -91,25 +91,28 @@ class SOFTMAXBenchmark(Benchmark):
 
 
 def softmax_input_fn(shape, cur_dtype, device):
+    shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim = shape
+    shape = shape_detail_M, shape_detail_N, shape_detail_K
     inp = torch.randn(shape, dtype=cur_dtype, device=device)
-    if inp.ndim == 4:
-        yield inp,
-        yield inp, 0
-        yield inp, 1
-        yield inp, 2
-        yield inp, 3
-    elif inp.ndim == 3:
-        yield inp,
-        yield inp, 0
-        yield inp, 1
-        yield inp, 2
-    elif inp.ndim == 2:
-        yield inp,
-        yield inp, 0
-        yield inp, 1
-    elif inp.ndim == 1:
-        yield inp,
-        yield inp, 0
+    yield inp, form_detail_dim
+    # if inp.ndim == 4:
+    #     yield inp,
+    #     yield inp, 0
+    #     yield inp, 1
+    #     yield inp, 2
+    #     yield inp, 3
+    # elif inp.ndim == 3:
+    #     yield inp,
+    #     yield inp, 0
+    #     yield inp, 1
+    #     yield inp, 2
+    # elif inp.ndim == 2:
+    #     yield inp,
+    #     yield inp, 0
+    #     yield inp, 1
+    # elif inp.ndim == 1:
+    #     yield inp,
+    #     yield inp, 0
 
 
 @pytest.mark.parametrize(

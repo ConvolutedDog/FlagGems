@@ -72,6 +72,11 @@ excel_config = {
     "dtype_col": "dtype",
     # Shape parameters.
     "shape_cols": ["shape_detail_M", "shape_detail_N", "shape_detail_K"],
+    # In addition to the shape parameters defined in the yaml file, there are also some
+    # parameters that are some parameters that are form parameters of functions, such as
+    # the `dim` parameter of the `mean` operator. When dealing with form parameters, I
+    # still treat them as shape parameters for simplicity.
+    "form_cols": ["form_detail_dim"],
     # Auto-tune configs.
     "config_cols": [
         "TILE_K",
@@ -128,18 +133,27 @@ archive_file_with_timestamp(result_file)
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_M():
     # return list(range(512, 8192 + 1, 512))
-    return [1]
+    return [1024]
 
 
 # Cause the input_fn of softmax set the dim = 1, so this needs to define N != 1
 def gen_shape_detail_N():
     # return list(range(512, 524288 + 1, 512))
-    return [1024 * 1024]
+    return [1024]
 
 
 def gen_shape_detail_K():
     # return list(range(512, 8192 + 1, 512))
-    return [1]
+    return [1024]
+
+
+def gen_form_detail_dim():
+    return [
+        None,
+        0,
+        1,
+        2,
+    ]
 
 
 def gen_TILE_K():
@@ -158,7 +172,9 @@ def gen_TILE_K():
 # ===---------------------------------------------------------------------------------===
 
 shapegen = ShapeGenerator(
-    excel_config, (gen_shape_detail_M, gen_shape_detail_N, gen_shape_detail_K)
+    excel_config,
+    (gen_shape_detail_M, gen_shape_detail_N, gen_shape_detail_K),
+    form_generators=[gen_form_detail_dim],
 )
 configgen = ConfigGenerator(
     excel_config,
