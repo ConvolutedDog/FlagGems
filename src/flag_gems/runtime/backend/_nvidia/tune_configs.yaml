@@ -847,7 +847,7 @@ nonzero:
     META:
       BLOCK_SIZE: blocks
     num_warps: warps
-    num_stages: 4
+    num_stages: stages
   warps:
   - 4
   - 8
@@ -860,6 +860,8 @@ nonzero:
   - 2048
   - 4096
   - 8192
+  stages:
+  - 4
 randperm:
 - gen: true
   param_map:

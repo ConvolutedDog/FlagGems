@@ -1,0 +1,4 @@
+NONZEROBenchmark:
+  shape_desc: M, N
+  shapes:
+  - [1024, 1024]
