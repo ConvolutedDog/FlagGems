@@ -76,18 +76,24 @@ class ALLBenchmark(Benchmark):
     def get_input_iter(self, cur_dtype) -> Generator:
         for shape in self.shapes:
             inp = generate_tensor_input(shape, cur_dtype, self.device)
-            if inp.ndim > 1:
-                yield inp, 1
-            else:
+            if inp.ndim == 4:
                 yield inp,
-
-
-def all_input_fn(shape, cur_dtype, device):
-    inp = generate_tensor_input(shape, cur_dtype, device)
-    if inp.ndim > 1:
-        yield inp, 1
-    else:
-        yield inp,
+                yield inp, 0
+                yield inp, 1
+                yield inp, 2
+                yield inp, 3
+            elif inp.ndim == 3:
+                yield inp,
+                yield inp, 0
+                yield inp, 1
+                yield inp, 2
+            elif inp.ndim == 2:
+                yield inp,
+                yield inp, 0
+                yield inp, 1
+            elif inp.ndim == 1:
+                yield inp,
+                yield inp, 0
 
 
 @pytest.mark.parametrize(
@@ -96,12 +102,11 @@ def all_input_fn(shape, cur_dtype, device):
         pytest.param(
             "all",
             torch.all,
-            all_input_fn,
             marks=pytest.mark.all,
         ),
     ],
 )
-def test_all_benchmark(op_name, torch_op, input_fn):
+def test_all_benchmark(op_name, torch_op):
     bench = ALLBenchmark(
         # input_fn=input_fn,
         op_name=op_name,
