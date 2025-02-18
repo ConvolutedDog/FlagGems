@@ -59,7 +59,17 @@ excel_config = {
     # Data type.
     "dtype_col": "dtype",
     # Shape parameters.
-    "shape_cols": ["shape_detail_M", "shape_detail_N"],
+    "shape_cols": [
+        "shape_detail_N",
+        "shape_detail_C",
+        "shape_detail_H",
+        "shape_detail_W",
+    ],
+    # In addition to the shape parameters defined in the yaml file, there are also some
+    # parameters that are some parameters that are form parameters of functions, such as
+    # the `dim` parameter of the `mean` operator. When dealing with form parameters, I
+    # still treat them as shape parameters for simplicity.
+    "form_cols": ["form_detail_dim"],
     # Auto-tune configs.
     "config_cols": [
         "block_m",
@@ -70,7 +80,7 @@ excel_config = {
     # Benchmark name of shape yaml.
     "bench_name": "COUNTNONZEROBenchmark",
     # Shape description of shape yaml. It should correspond one-to-one with "shape_cols".
-    "shape_desc": ["M", "N"],
+    "shape_desc": ["N", "C", "H", "W"],
 }
 config_format = read_config_from_yaml(pytest_operation_name)
 print(f"Using config format of {config_format} to write configs.")
@@ -111,14 +121,28 @@ archive_file_with_timestamp(result_file)
 
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
-def gen_shape_detail_M():
-    # return list(range(512, 8192 + 1, 512))
-    return [2048]
-
-
 def gen_shape_detail_N():
     # return list(range(512, 8192 + 1, 512))
-    return [2048]
+    return [16]
+
+
+def gen_shape_detail_C():
+    # return list(range(512, 8192 + 1, 512))
+    return [3]
+
+
+def gen_shape_detail_H():
+    # return list(range(512, 8192 + 1, 512))
+    return [224]
+
+
+def gen_shape_detail_W():
+    # return list(range(512, 8192 + 1, 512))
+    return [224]
+
+
+def gen_form_detail_dim():
+    return [None, 0, 1, 2, 3]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -131,24 +155,30 @@ def gen_shape_detail_N():
 
 
 # Define functions to generate parameters
-def gen_block_m(shape_detail_M, shape_detail_N):
+def gen_block_m(
+    shape_detail_N, shape_detail_C, shape_detail_H, shape_detail_W, form_detail_dim
+):
     """
     block m: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
     """
-    res = 5.02754660e-5 * shape_detail_M + 5.70746029e-05 * shape_detail_N + 0.951953125
+    res = 5.02754660e-5 * shape_detail_C + 5.70746029e-05 * shape_detail_N + 0.951953125
     return 2 ** (round(res + 5))
 
 
-def gen_warps(shape_detail_M, shape_detail_N):
+def gen_warps(
+    shape_detail_N, shape_detail_C, shape_detail_H, shape_detail_W, form_detail_dim
+):
     """
     num warps: -1.61563649e-05 2.72414264e-05 -2.95751235e-05 1.27919921875 1
     """
     res = (
-        -1.61563649e-05 * shape_detail_M
+        -1.61563649e-05 * shape_detail_C
         + -2.95751235e-05 * shape_detail_N
         + 1.27919921875
     )
-    return 2 ** (round(res + 1))
+    return 2 ** (
+        round(res + 1) + (form_detail_dim if form_detail_dim is not None else 0)
+    )
 
 
 # ===---------------------------------------------------------------------------------===
@@ -162,7 +192,11 @@ def gen_warps(shape_detail_M, shape_detail_N):
 # previously evaluated combinations.
 # ===---------------------------------------------------------------------------------===
 
-shapegen = ShapeGenerator(excel_config, (gen_shape_detail_M, gen_shape_detail_N))
+shapegen = ShapeGenerator(
+    excel_config,
+    (gen_shape_detail_N, gen_shape_detail_C, gen_shape_detail_H, gen_shape_detail_W),
+    form_generators=[gen_form_detail_dim],
+)
 
 # print(shapegen.generate())
 # for kv in shapegen.generate():

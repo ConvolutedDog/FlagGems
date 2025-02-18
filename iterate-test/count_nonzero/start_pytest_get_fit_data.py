@@ -71,7 +71,17 @@ excel_config = {
     # Data type.
     "dtype_col": "dtype",
     # Shape parameters.
-    "shape_cols": ["shape_detail_M", "shape_detail_N"],
+    "shape_cols": [
+        "shape_detail_N",
+        "shape_detail_C",
+        "shape_detail_H",
+        "shape_detail_W",
+    ],
+    # In addition to the shape parameters defined in the yaml file, there are also some
+    # parameters that are some parameters that are form parameters of functions, such as
+    # the `dim` parameter of the `mean` operator. When dealing with form parameters, I
+    # still treat them as shape parameters for simplicity.
+    "form_cols": ["form_detail_dim"],
     # Auto-tune configs.
     "config_cols": [
         "block_m",
@@ -82,7 +92,7 @@ excel_config = {
     # Benchmark name of shape yaml.
     "bench_name": "COUNTNONZEROBenchmark",
     # Shape description of shape yaml. It should correspond one-to-one with "shape_cols".
-    "shape_desc": ["M", "N"],
+    "shape_desc": ["N", "C", "H", "W"],
 }
 if filter_out_repeat_comb:
     read_native_flaggems_from_trainset(
@@ -127,20 +137,38 @@ archive_file_with_timestamp(result_file)
 
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
-def gen_shape_detail_M():
-    return list(range(512, 8192 + 1, 512))
-
-
 def gen_shape_detail_N():
-    return list(range(512, 8192 + 1, 512))
+    # return list(range(512, 8192 + 1, 512))
+    return [16]
+
+
+def gen_shape_detail_C():
+    # return list(range(512, 8192 + 1, 512))
+    return [3]
+
+
+def gen_shape_detail_H():
+    # return list(range(512, 8192 + 1, 512))
+    return [224]
+
+
+def gen_shape_detail_W():
+    # return list(range(512, 8192 + 1, 512))
+    return [224]
+
+
+def gen_form_detail_dim():
+    return [None, 0, 1, 2, 3]
 
 
 def gen_block_m():
-    return [128, 256, 512, 1024, 2048, 4096]
+    # return [128, 256, 512, 1024, 2048, 4096]
+    return [128]
 
 
 def gen_warps():
-    return [2, 4, 8, 16, 32]
+    # return [2, 4, 8, 16, 32]
+    return [2]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -154,7 +182,11 @@ def gen_warps():
 # previously evaluated combinations.
 # ===---------------------------------------------------------------------------------===
 
-shapegen = ShapeGenerator(excel_config, (gen_shape_detail_M, gen_shape_detail_N))
+shapegen = ShapeGenerator(
+    excel_config,
+    (gen_shape_detail_N, gen_shape_detail_C, gen_shape_detail_H, gen_shape_detail_W),
+    form_generators=[gen_form_detail_dim],
+)
 configgen = ConfigGenerator(
     excel_config,
     (gen_block_m, gen_warps),
