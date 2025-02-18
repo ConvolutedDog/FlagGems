@@ -73,107 +73,115 @@ class UPSAMPLENEAREST2DBenchmark(GenericBenchmark):
 
 
 def upsample_nearest2d_input_fn(shape, dtype, device):
-    batch, channel, height, weight = shape
+    batch, channel, height, weight, form_detail_Ho, form_detail_Wo = shape
+    shape = batch, channel, height, weight
     input = torch.randn(size=shape, device=device, dtype=dtype)
-    scale_factors = (2, 2)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
+    output_size = (form_detail_Ho, form_detail_Wo)
     yield {
         "input": input,
         "output_size": output_size,
         "scales_h": None,
         "scales_w": None,
     },
-    scale_factors = (2, 3)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
-    yield {
-        "input": input,
-        "output_size": output_size,
-        "scales_h": None,
-        "scales_w": None,
-    },
-    scale_factors = (2, 4)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
-    yield {
-        "input": input,
-        "output_size": output_size,
-        "scales_h": None,
-        "scales_w": None,
-    },
-    scale_factors = (3, 2)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
-    yield {
-        "input": input,
-        "output_size": output_size,
-        "scales_h": None,
-        "scales_w": None,
-    },
-    scale_factors = (3, 3)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
-    yield {
-        "input": input,
-        "output_size": output_size,
-        "scales_h": None,
-        "scales_w": None,
-    },
-    scale_factors = (3, 4)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
-    yield {
-        "input": input,
-        "output_size": output_size,
-        "scales_h": None,
-        "scales_w": None,
-    },
-    scale_factors = (4, 2)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
-    yield {
-        "input": input,
-        "output_size": output_size,
-        "scales_h": None,
-        "scales_w": None,
-    },
-    scale_factors = (4, 3)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
-    yield {
-        "input": input,
-        "output_size": output_size,
-        "scales_h": None,
-        "scales_w": None,
-    },
-    scale_factors = (4, 4)
-    output_size = (
-        int(height * scale_factors[0]),
-        int(weight * scale_factors[1]),
-    )
-    yield {
-        "input": input,
-        "output_size": output_size,
-        "scales_h": None,
-        "scales_w": None,
-    },
+    # scale_factors = (2, 2)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
+    # scale_factors = (2, 3)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
+    # scale_factors = (2, 4)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
+    # scale_factors = (3, 2)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
+    # scale_factors = (3, 3)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
+    # scale_factors = (3, 4)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
+    # scale_factors = (4, 2)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
+    # scale_factors = (4, 3)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
+    # scale_factors = (4, 4)
+    # output_size = (
+    #     int(height * scale_factors[0]),
+    #     int(weight * scale_factors[1]),
+    # )
+    # yield {
+    #     "input": input,
+    #     "output_size": output_size,
+    #     "scales_h": None,
+    #     "scales_w": None,
+    # },
 
 
 @pytest.mark.parametrize(

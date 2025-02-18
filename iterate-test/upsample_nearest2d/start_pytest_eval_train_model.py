@@ -64,6 +64,8 @@ excel_config = {
         "shape_detail_C",
         "shape_detail_H",
         "shape_detail_W",
+        "form_detail_Ho",
+        "form_detail_Wo",
     ],
     # Auto-tune configs.
     "config_cols": ["block_n", "warps"],
@@ -133,6 +135,17 @@ def gen_shape_detail_W():
     return [224]
 
 
+scale_factor_h, scale_factor_w = 2, 2
+
+
+def gen_form_detail_Ho():
+    return list(map(lambda i: i * scale_factor_h, gen_shape_detail_H()))
+
+
+def gen_form_detail_Wo():
+    return list(map(lambda i: i * scale_factor_w, gen_shape_detail_W()))
+
+
 # ===---------------------------------------------------------------------------------===
 # Configuration Parameter Generation Functions
 # ===---------------------------------------------------------------------------------===
@@ -143,12 +156,28 @@ def gen_shape_detail_W():
 
 
 # Define functions to generate parameters
-def gen_block_n():
-    return [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+def gen_block_n(
+    shape_detail_N,
+    shape_detail_C,
+    shape_detail_H,
+    shape_detail_W,
+    form_detail_Ho,
+    form_detail_Wo,
+):
+    # return [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+    return 16
 
 
-def gen_warps():
-    return [1, 2, 4, 8, 16]
+def gen_warps(
+    shape_detail_N,
+    shape_detail_C,
+    shape_detail_H,
+    shape_detail_W,
+    form_detail_Ho,
+    form_detail_Wo,
+):
+    # return [1, 2, 4, 8, 16]
+    return 1
 
 
 # ===---------------------------------------------------------------------------------===
@@ -164,7 +193,14 @@ def gen_warps():
 
 shapegen = ShapeGenerator(
     excel_config,
-    (gen_shape_detail_N, gen_shape_detail_C, gen_shape_detail_H, gen_shape_detail_W),
+    (
+        gen_shape_detail_N,
+        gen_shape_detail_C,
+        gen_shape_detail_H,
+        gen_shape_detail_W,
+        gen_form_detail_Ho,
+        gen_form_detail_Wo,
+    ),
 )
 
 # print(shapegen.generate())

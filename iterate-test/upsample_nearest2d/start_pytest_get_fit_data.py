@@ -81,6 +81,8 @@ excel_config = {
         "shape_detail_C",
         "shape_detail_H",
         "shape_detail_W",
+        "form_detail_Ho",
+        "form_detail_Wo",
     ],
     # Auto-tune configs.
     "config_cols": ["block_n", "warps"],
@@ -154,6 +156,17 @@ def gen_shape_detail_W():
     return [224]
 
 
+scale_factor_h, scale_factor_w = 2, 2
+
+
+def gen_form_detail_Ho():
+    return list(map(lambda i: i * scale_factor_h, gen_shape_detail_H()))
+
+
+def gen_form_detail_Wo():
+    return list(map(lambda i: i * scale_factor_w, gen_shape_detail_W()))
+
+
 def read_params_from_cfg(folder_path):
     """
     Reads the parameters from all `.cfg` files in the folder and returns
@@ -180,14 +193,18 @@ def read_params_from_cfg(folder_path):
                     input_c = int(parts[5])  # C
 
                     for batch in [1, 4, 8, 16, 32]:
-                        shapes.append(
-                            {
-                                "shape_detail_N": batch,
-                                "shape_detail_H": input_h,
-                                "shape_detail_W": input_w,
-                                "shape_detail_C": input_c,
-                            }
-                        )
+                        for scale_factor_h in [2, 3, 4]:
+                            for scale_factor_w in [2, 3, 4]:
+                                shapes.append(
+                                    {
+                                        "shape_detail_N": batch,
+                                        "shape_detail_H": input_h,
+                                        "shape_detail_W": input_w,
+                                        "shape_detail_C": input_c,
+                                        "form_detail_Ho": input_h * scale_factor_h,
+                                        "form_detail_Wo": input_w * scale_factor_w,
+                                    }
+                                )
 
     return shapes
 
@@ -296,7 +313,14 @@ def gen_warps():
 
 shapegen = ShapeGenerator(
     excel_config,
-    (gen_shape_detail_N, gen_shape_detail_C, gen_shape_detail_H, gen_shape_detail_W),
+    (
+        gen_shape_detail_N,
+        gen_shape_detail_C,
+        gen_shape_detail_H,
+        gen_shape_detail_W,
+        gen_form_detail_Ho,
+        gen_form_detail_Wo,
+    ),
     (
         constraint_real_conv_params
         if pytest_constraint_real_conv_params
