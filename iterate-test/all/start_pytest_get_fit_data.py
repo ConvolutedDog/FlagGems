@@ -77,6 +77,11 @@ excel_config = {
         "shape_detail_H",
         "shape_detail_W",
     ],
+    # In addition to the shape parameters defined in the yaml file, there are also some
+    # parameters that are some parameters that are form parameters of functions, such as
+    # the `dim` parameter of the `mean` operator. When dealing with form parameters, I
+    # still treat them as shape parameters for simplicity.
+    "form_cols": ["form_detail_dim"],
     # Auto-tune configs.
     "config_cols": [
         "block_m",
@@ -153,6 +158,10 @@ def gen_shape_detail_W():
     return [224]
 
 
+def gen_form_detail_dim():
+    return [None, 0, 1, 2, 3]
+
+
 def gen_block_m():
     return [1, 2, 4, 8, 16, 32]
 
@@ -179,6 +188,7 @@ def gen_warps():
 shapegen = ShapeGenerator(
     excel_config,
     (gen_shape_detail_N, gen_shape_detail_C, gen_shape_detail_H, gen_shape_detail_W),
+    form_generators=[gen_form_detail_dim],
 )
 configgen = ConfigGenerator(
     excel_config,
