@@ -97,7 +97,7 @@ class ALLBenchmark(Benchmark):
 
 
 @pytest.mark.parametrize(
-    "op_name, torch_op, input_fn",
+    "op_name, torch_op",
     [
         pytest.param(
             "all",
