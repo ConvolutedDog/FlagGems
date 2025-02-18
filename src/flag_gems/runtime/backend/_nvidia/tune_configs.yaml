@@ -609,7 +609,7 @@ any:
     META:
       BLOCK_M: block_m
       BLOCK_N: block_n
-    num_warps: 4
+    num_warps: warps
   block_m:
   - 1
   - 2
@@ -617,6 +617,8 @@ any:
   - 8
   block_n:
   - 1024
+  warps:
+  - 4
 index_select:
 - gen: true
   param_map:
