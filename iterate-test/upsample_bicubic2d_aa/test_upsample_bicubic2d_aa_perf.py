@@ -87,6 +87,165 @@ def upsample_bicubic2d_aa_input_fn(shape, dtype, device):
         "scales_h": None,
         "scales_w": None,
     },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    scale_factors = (2, 3)
+    output_size = (
+        int(height * scale_factors[0]),
+        int(weight * scale_factors[1]),
+    )
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": False,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    scale_factors = (2, 4)
+    output_size = (
+        int(height * scale_factors[0]),
+        int(weight * scale_factors[1]),
+    )
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": False,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    scale_factors = (3, 2)
+    output_size = (
+        int(height * scale_factors[0]),
+        int(weight * scale_factors[1]),
+    )
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": False,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    scale_factors = (3, 3)
+    output_size = (
+        int(height * scale_factors[0]),
+        int(weight * scale_factors[1]),
+    )
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": False,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    scale_factors = (3, 4)
+    output_size = (
+        int(height * scale_factors[0]),
+        int(weight * scale_factors[1]),
+    )
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": False,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    scale_factors = (4, 2)
+    output_size = (
+        int(height * scale_factors[0]),
+        int(weight * scale_factors[1]),
+    )
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": False,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    scale_factors = (4, 3)
+    output_size = (
+        int(height * scale_factors[0]),
+        int(weight * scale_factors[1]),
+    )
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": False,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    scale_factors = (4, 4)
+    output_size = (
+        int(height * scale_factors[0]),
+        int(weight * scale_factors[1]),
+    )
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": False,
+        "scales_h": None,
+        "scales_w": None,
+    },
+    yield {
+        "input": input,
+        "output_size": output_size,
+        "align_corners": True,
+        "scales_h": None,
+        "scales_w": None,
+    },
 
 
 @pytest.mark.parametrize(
