@@ -72,6 +72,11 @@ excel_config = {
     "dtype_col": "dtype",
     # Shape parameters.
     "shape_cols": ["shape_detail_M", "shape_detail_N", "shape_detail_K"],
+    # In addition to the shape parameters defined in the yaml file, there are also some
+    # parameters that are some parameters that are form parameters of functions, such as
+    # the `dim` parameter of the `mean` operator. When dealing with form parameters, I
+    # still treat them as shape parameters for simplicity.
+    "form_cols": ["form_detail_dim"],
     # Auto-tune configs.
     "config_cols": [
         "block_m",
@@ -128,30 +133,46 @@ archive_file_with_timestamp(result_file)
 
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
+# And now the second half of some following function names may also include the name in
+# "Form parameters" in excel_config, e.g., the function `gen_form_detail_dim`` of the
+# `mean` operator that generates the form parameters
 def gen_shape_detail_M():
-    return list(range(512, 524288 + 1, 512))
+    # return list(range(512, 524288 + 1, 512))
+    return [2]
 
 
 def gen_shape_detail_N():
     # return list(range(512, 8192 + 1, 512))
-    return [1]
+    return [2]
 
 
 def gen_shape_detail_K():
     # return list(range(512, 8192 + 1, 512))
-    return [1]
+    return [2]
+
+
+def gen_form_detail_dim():
+    return [
+        None,
+        0,
+        1,
+        2,
+    ]
 
 
 def gen_block_m():
-    return [1, 2, 4, 8]
+    # return [1, 2, 4, 8]
+    return [1]
 
 
 def gen_block_n():
-    return [64, 128, 612, 1024, 2048]
+    # return [64, 128, 612, 1024, 2048]
+    return [64]
 
 
 def gen_warps():
-    return [4, 8, 16, 32]
+    # return [4, 8, 16, 32]
+    return [4]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -166,7 +187,9 @@ def gen_warps():
 # ===---------------------------------------------------------------------------------===
 
 shapegen = ShapeGenerator(
-    excel_config, (gen_shape_detail_M, gen_shape_detail_N, gen_shape_detail_K)
+    excel_config,
+    (gen_shape_detail_M, gen_shape_detail_N, gen_shape_detail_K),
+    form_generators=[gen_form_detail_dim],
 )
 configgen = ConfigGenerator(
     excel_config,
