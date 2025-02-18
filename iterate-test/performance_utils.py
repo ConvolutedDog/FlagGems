@@ -120,6 +120,7 @@ def read_native_flaggems_from_trainset(
             ):
                 dtype = row[config["dtype_col"]]
                 if datatype in dtype:
+                    # TODO: Add "form_cols" here.
                     shape_cols = [int(row[col]) for col in config["shape_cols"]]
                     config_cols = [int(row[col]) for col in config["config_cols"]]
                     latency = row[config["latency_col"]]
@@ -370,12 +371,17 @@ class ShapeYAMLWriter:
         if not shape_cols:
             raise ValueError("`shape_cols` must be provided in `excel_config`.")
 
+        # Extract form columns from excel_config
+        form_cols = []
+        if "form_cols" in excel_config:
+            form_cols = excel_config.get("form_cols", [])
+
         # Prepare the YAML structure based on the template
         yaml_data = {
             bench_name: {
                 "shapes": [
                     [
-                        shape[col] for col in shape_cols
+                        shape[col] for col in shape_cols + form_cols
                     ]  # Dynamically extract shape values
                     for shape in shapes
                 ]
@@ -1443,7 +1449,13 @@ class ShapeGenerator:
     functions and constraints.
     """
 
-    def __init__(self, excel_config, shape_generators, shape_constraints=None):
+    def __init__(
+        self,
+        excel_config,
+        shape_generators,
+        shape_constraints=None,
+        form_generators=None,
+    ):
         """
         Initialize the ShapeGenerator.
 
@@ -1457,14 +1469,26 @@ class ShapeGenerator:
         """
         self.shape_cols = excel_config["shape_cols"]
         self.shape_generators = shape_generators
-        self._validate_generators()
+        # `shape_constraints` need to limit the generators for both "shape_cols" and
+        # "form_cols".
         self.shape_constraints = (
             shape_constraints if shape_constraints is not None else []
         )
 
+        if "form_cols" in excel_config:
+            self.form_cols = excel_config["form_cols"]
+            self.form_generators = (
+                form_generators if form_generators is not None else []
+            )
+
+        self._validate_generators()
+
     def _validate_generators(self):
         """
         Validate that the provided generator functions match the fields in "shape_cols".
+        And if this class has the attribute of `self.form_cols` and `self.form_generators`,
+        It also should validate that the generator functions in `self.form_generators`
+        match the fields in `self.form_cols`.
         """
         # Extract field names from generator function names
         generator_fields = [gen.__name__[4:] for gen in self.shape_generators]
@@ -1485,6 +1509,26 @@ class ShapeGenerator:
                 f"These fields are not in 'shape_cols'."
             )
 
+        if hasattr(self, "form_cols") and hasattr(self, "form_generators"):
+            # Extract field names from generator function names
+            generator_fields = [gen.__name__[4:] for gen in self.form_generators]
+
+            # Check if all required fields are covered
+            missing_fields = set(self.form_cols) - set(generator_fields)
+            if missing_fields:
+                raise ValueError(
+                    f"Missing generator functions for fields: {missing_fields}. "
+                    f"Expected functions named 'gen_<field_name>'."
+                )
+
+            # Check if there are any extra fields
+            extra_fields = set(generator_fields) - set(self.form_cols)
+            if extra_fields:
+                raise ValueError(
+                    f"Extra generator functions for fields: {extra_fields}. "
+                    f"These fields are not in 'form_cols'."
+                )
+
     def generate(self):
         """
         Generate all possible combinations of shape parameters.
@@ -1503,12 +1547,26 @@ class ShapeGenerator:
         for key in self.shape_cols:
             values[key] = generator_map[key]()
 
+        if hasattr(self, "form_cols") and hasattr(self, "form_generators"):
+            generator_map.update(
+                {gen.__name__[4:]: gen for gen in self.form_generators}
+            )
+            for key in self.form_cols:
+                values[key] = generator_map[key]()
+
         # Generate all combinations
         combinations = []
         for combination in product(*values.values()):
-            param_dict = {
-                key: value for key, value in zip(self.shape_cols, combination)
-            }
+            param_dict = None
+            if hasattr(self, "form_cols") and hasattr(self, "form_generators"):
+                param_dict = {
+                    key: value
+                    for key, value in zip(self.shape_cols + self.form_cols, combination)
+                }
+            else:
+                param_dict = {
+                    key: value for key, value in zip(self.shape_cols, combination)
+                }
 
             # Apply constraints
             if all(constraint(**param_dict) for constraint in self.shape_constraints):
@@ -1648,6 +1706,10 @@ class TunedConfigGenerator:
         """
         self.config_cols = excel_config["config_cols"]
         self.shape_cols = excel_config["shape_cols"]
+
+        if "form_cols" in excel_config:
+            self.form_cols = excel_config["form_cols"]
+
         self.config_generators = config_generators
         self.shapes_list = shapegen.generate()
         self._validate_generators()
@@ -1677,9 +1739,14 @@ class TunedConfigGenerator:
             )
 
         # Check if each generation function has the parameters that contails all of
-        # items in `slef.shape_cols`.
+        # items in `slef.shape_cols`. And after we have added the `form_cols` into
+        # `excel_config`, so the parameter of `config_generators` shoulds also include
+        # the names in `excel_config["form_cols"]`.
         for func in self.config_generators:
-            self._check_parameters_match(func, self.shape_cols)
+            if hasattr(self, "form_cols"):
+                self._check_parameters_match(func, self.shape_cols + self.form_cols)
+            else:
+                self._check_parameters_match(func, self.shape_cols)
 
     def _check_parameters_match(self, func, param_names):
         """
