@@ -67,10 +67,24 @@ class COUNTNONZEROBenchmark(GenericBenchmark2DOnly):
 
 def count_nonzero_input_fn(shape, cur_dtype, device):
     inp = torch.randn(shape, dtype=cur_dtype, device=device)
-    # dim = random.choice([None, 0, 1])
-    dim = None
-
-    yield inp, dim
+    if inp.ndim == 4:
+        yield inp,
+        yield inp, 0
+        yield inp, 1
+        yield inp, 2
+        yield inp, 3
+    elif inp.ndim == 3:
+        yield inp,
+        yield inp, 0
+        yield inp, 1
+        yield inp, 2
+    elif inp.ndim == 2:
+        yield inp,
+        yield inp, 0
+        yield inp, 1
+    elif inp.ndim == 1:
+        yield inp,
+        yield inp, 0
 
 
 @pytest.mark.parametrize(
