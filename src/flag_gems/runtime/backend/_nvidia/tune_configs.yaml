@@ -989,9 +989,13 @@ triu:
 - gen: true
   param_map:
     META:
-      M_BLOCK_SIZE: 1
-      N_BLOCK_SIZE: 2048
+      M_BLOCK_SIZE: block_m
+      N_BLOCK_SIZE: block_n
     num_warps: warps
+  block_m:
+  - 1
+  block_n:
+  - 2048
   warps:
   - 1
   - 2

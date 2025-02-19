@@ -129,6 +129,8 @@
             [ 0.0000, -0.5211, -0.4573]])
     ```
 
+    diagonal: -(M-2) ~ (N-1)
+
     Returns the upper triangular part of a matrix (2-D tensor) or batch of matrices input, the other elements of the result tensor out are set to 0.
 
     The upper triangular part of the matrix is defined as the elements on and above the diagonal.
