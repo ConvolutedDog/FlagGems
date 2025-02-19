@@ -974,13 +974,17 @@ sum:
   param_map:
     META:
       BLOCK_M: block_m
-      BLOCK_N: 1024
-    num_warps: 4
+      BLOCK_N: block_n
+    num_warps: warps
   block_m:
   - 1
   - 2
   - 4
   - 8
+  block_n:
+  - 1024
+  warps:
+  - 4
 triu:
 - gen: true
   param_map:
