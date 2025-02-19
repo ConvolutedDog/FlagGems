@@ -1,0 +1,4 @@
+LOGSOFTMAXBenchmark:
+  shape_desc: N, C, H, W
+  shapes:
+  - [2, 2, 2, 2, 2]
