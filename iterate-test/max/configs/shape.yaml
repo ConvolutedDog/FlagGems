@@ -1,0 +1,4 @@
+MAXBenchmark:
+  shape_desc: N, C, H, W
+  shapes:
+  - [2, 3, 64, 64, 3]
