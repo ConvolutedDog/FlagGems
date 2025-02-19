@@ -237,7 +237,7 @@ def read_params_from_cfg(folder_path):
     return shapes
 
 
-cfg_folder_path = "./configs/Config/"
+cfg_folder_path = "../conv_params/Config/"
 
 
 def custom_generator():
