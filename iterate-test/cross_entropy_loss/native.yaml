@@ -1,0 +1,37 @@
+cross_entropy_loss:
+- META:
+    BLOCK_C: 256
+    BLOCK_D: 1
+  num_warps: 4
+- META:
+    BLOCK_C: 256
+    BLOCK_D: 4
+  num_warps: 4
+- META:
+    BLOCK_C: 256
+    BLOCK_D: 16
+  num_warps: 4
+- META:
+    BLOCK_C: 512
+    BLOCK_D: 1
+  num_warps: 4
+- META:
+    BLOCK_C: 512
+    BLOCK_D: 4
+  num_warps: 4
+- META:
+    BLOCK_C: 512
+    BLOCK_D: 16
+  num_warps: 4
+- META:
+    BLOCK_C: 1024
+    BLOCK_D: 1
+  num_warps: 4
+- META:
+    BLOCK_C: 1024
+    BLOCK_D: 4
+  num_warps: 4
+- META:
+    BLOCK_C: 1024
+    BLOCK_D: 16
+  num_warps: 4
