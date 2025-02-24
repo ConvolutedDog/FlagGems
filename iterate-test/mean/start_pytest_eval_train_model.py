@@ -10,6 +10,7 @@ from performance_utils import (
     ShapeGenerator,
     TunedConfigGenerator,
     archive_file_with_timestamp,
+    get_gpu_name,
     print_centered_label,
     read_config_from_yaml,
     run_perf_pytest,
@@ -118,27 +119,28 @@ archive_file_with_timestamp(result_file)
 # NOTE: The function name must start with "gen_", and the second half of the name must
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_M():
-    # return list(range(512, 524288 + 1, 512))
-    return [2]
+    return list(range(512, 8192 + 1, 512))
+    # return [2]
 
 
 def gen_shape_detail_N():
     # return list(range(512, 8192 + 1, 512))
-    return [2]
+    return [1]
 
 
 def gen_shape_detail_K():
     # return list(range(512, 8192 + 1, 512))
-    return [2]
+    return [1]
 
 
 def gen_form_detail_dim():
-    return [
-        None,
-        0,
-        1,
-        2,
-    ]
+    # return [
+    #     None,
+    #     0,
+    #     1,
+    #     2,
+    # ]
+    return [None]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -149,40 +151,62 @@ def gen_form_detail_dim():
 # use predefined formulas to calculate optimal values for each parameter.
 # ===---------------------------------------------------------------------------------===
 
+current_gpu_name = get_gpu_name()
+
 
 # Define functions to generate parameters
 def gen_block_m(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim):
-    """
-    block m: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
-    """
-    res = 5.02754660e-5 * shape_detail_M + 5.70746029e-05 * shape_detail_N + 0.951953125
-    return 2 ** (round(res + 5)) + 0 * (
-        form_detail_dim if form_detail_dim is not None else 0
-    )
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = 4.36907119483584e-7 * shape_detail_M + 7.84629307184751
+        candidates = [1, 2, 4, 8]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = 2.40565216018615e-7 * shape_detail_M + 7.91539131231672
+        candidates = [1, 2, 4, 8]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = 8.90578061297477e-8 * shape_detail_M + 7.96881873167155
+        candidates = [1, 2, 4, 8]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 def gen_block_n(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim):
-    """
-    block n: 4.52714808e-05 -7.57329604e-06 3.63630407e-05 0.52656250 6
-    """
-    res = 4.52714808e-05 * shape_detail_M + 3.63630407e-05 * shape_detail_N + 0.52656250
-    return 2 ** (round(res + 6)) + 0 * (
-        form_detail_dim if form_detail_dim is not None else 0
-    )
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = 68.2030791788856 - 1.1968670651241e-5 * shape_detail_M
+        candidates = [64, 128, 256, 512, 1024, 2048]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = 65.4871700879765 - 4.23845307917888e-6 * shape_detail_M
+        candidates = [64, 128, 256, 512, 1024, 2048]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = 64.0000000000000
+        candidates = [64, 128, 256, 512, 1024, 2048]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 def gen_warps(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim):
-    """
-    num warps: -1.61563649e-05 2.72414264e-05 -2.95751235e-05 1.27919921875 1
-    """
-    res = (
-        -1.61563649e-05 * shape_detail_M
-        + -2.95751235e-05 * shape_detail_N
-        + 1.27919921875
-    )
-    return 2 ** (round(res + 1)) + 0 * (
-        form_detail_dim if form_detail_dim is not None else 0
-    )
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = 4.26365469208211 - 7.51709001837315e-7 * shape_detail_M
+        candidates = [4, 8, 16, 32]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = 4.78482404692082 - 2.21684088003362e-6 * shape_detail_M
+        candidates = [4, 8, 16, 32]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = 4.07709402492669 - 2.19370331275481e-7 * shape_detail_M
+        candidates = [4, 8, 16, 32]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 # ===---------------------------------------------------------------------------------===

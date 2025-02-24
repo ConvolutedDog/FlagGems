@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Any, Generator, List, Optional, Tuple
 
 import pandas as pd
+import pynvml
 import pytest
 import torch
 import yaml
@@ -1953,3 +1954,32 @@ stringDtype2TorchDtypeDict = {
 
 def stringDtype2TorchDtype(stringDtype: str) -> str:
     return stringDtype2TorchDtypeDict[stringDtype]
+
+
+def get_gpu_name():
+    try:
+        # Get the value of the environment variable CUDA_VISIBLE_DEVICES
+        cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
+
+        # Extract the first GPU index from CUDA_VISIBLE_DEVICES
+        gpu_index = int(cuda_visible_devices.split(",")[0])  # Get the first GPU index
+
+        # Initialize NVML
+        pynvml.nvmlInit()
+
+        # Get the handle of the GPU using the extracted index
+        handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_index)
+
+        # Get the name of the GPU
+        gpu_name = pynvml.nvmlDeviceGetName(handle)
+
+        # Shutdown NVML
+        pynvml.nvmlShutdown()
+
+        return gpu_name
+    except pynvml.NVMLError as e:
+        # Handle errors (e.g., no GPU found, NVML not initialized)
+        return f"Error: {e}"
+    except Exception as e:
+        # Handle other exceptions (e.g., invalid CUDA_VISIBLE_DEVICES value)
+        return f"Error: {e}"

@@ -4,5 +4,9 @@ upsample_nearest2d:
     META:
       BLOCK_SIZE: block_n
     num_warps: warps
-  block_n: [1024, 2048]
-  warps: [4, 8]
+  block_n:
+  - 1024
+  - 2048
+  warps:
+  - 4
+  - 8

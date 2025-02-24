@@ -10,6 +10,7 @@ from performance_utils import (
     ShapeGenerator,
     TunedConfigGenerator,
     archive_file_with_timestamp,
+    get_gpu_name,
     print_centered_label,
     read_config_from_yaml,
     run_perf_pytest,
@@ -117,22 +118,26 @@ archive_file_with_timestamp(result_file)
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_N():
     # return list(range(512, 8192 + 1, 512))
-    return [4]
+    return [
+        1,
+    ]
 
 
 def gen_shape_detail_C():
     # return list(range(512, 524288 + 1, 512))
-    return [3]
+    return [
+        3,
+    ]
 
 
 def gen_shape_detail_H():
     # return list(range(512, 524288 + 1, 512))
-    return [224]
+    return [7, 13, 27, 56, 112, 224]
 
 
 def gen_shape_detail_W():
     # return list(range(512, 8192 + 1, 512))
-    return [224]
+    return [7, 13, 27, 56, 112, 224]
 
 
 scale_factor_h, scale_factor_w = 2, 2
@@ -146,6 +151,20 @@ def gen_form_detail_Wo():
     return list(map(lambda i: i * scale_factor_w, gen_shape_detail_W()))
 
 
+def constraint_HW_equal(**kwargs):
+    input_h = kwargs["shape_detail_H"]
+    input_w = kwargs["shape_detail_W"]
+
+    form_detail_Ho = kwargs["form_detail_Ho"]
+    form_detail_Wo = kwargs["form_detail_Wo"]
+
+    return (
+        input_h == input_w
+        and form_detail_Ho == 2 * input_h
+        and form_detail_Wo == 2 * input_w
+    )
+
+
 # ===---------------------------------------------------------------------------------===
 # Configuration Parameter Generation Functions
 # ===---------------------------------------------------------------------------------===
@@ -153,6 +172,8 @@ def gen_form_detail_Wo():
 # split factors, number of stages, etc.) based on input shapes (M, K, N). These functions
 # use predefined formulas to calculate optimal values for each parameter.
 # ===---------------------------------------------------------------------------------===
+
+current_gpu_name = get_gpu_name()
 
 
 # Define functions to generate parameters
@@ -164,8 +185,39 @@ def gen_block_n(
     form_detail_Ho,
     form_detail_Wo,
 ):
-    # return [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
-    return 16
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = (
+            -0.00660090172074113 * shape_detail_C
+            + 1.70268651097824 * shape_detail_H
+            - 1.53809040762666 * shape_detail_N
+            + 1.70268651097824 * shape_detail_W
+            + 262.167259759111
+        )
+        candidates = [156, 512, 1024, 2048, 4096]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = (
+            -0.029749987219103 * shape_detail_C
+            + 1.22629818764949 * shape_detail_H
+            - 2.78031966166532 * shape_detail_N
+            + 1.22629818764949 * shape_detail_W
+            + 329.45064476148
+        )
+        candidates = [156, 512, 1024, 2048, 4096]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = (
+            -0.0263468967131644 * shape_detail_C
+            + 2.45369420195092 * shape_detail_H
+            - 0.798437523656681 * shape_detail_N
+            + 2.45369420195092 * shape_detail_W
+            + 263.903146264578
+        )
+        candidates = [156, 512, 1024, 2048, 4096]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 def gen_warps(
@@ -176,8 +228,39 @@ def gen_warps(
     form_detail_Ho,
     form_detail_Wo,
 ):
-    # return [1, 2, 4, 8, 16]
-    return 1
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = (
+            -0.000733199780908817 * shape_detail_C
+            - 0.0202793134282105 * shape_detail_H
+            - 0.0824917864010052 * shape_detail_N
+            - 0.0202793134282105 * shape_detail_W
+            + 7.86860335102747
+        )
+        candidates = [2, 4, 8, 16]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = (
+            -0.00105658030375112 * shape_detail_C
+            - 0.0198305135122421 * shape_detail_H
+            - 0.0720323800007066 * shape_detail_N
+            - 0.019830513512242 * shape_detail_W
+            + 7.55422547727122
+        )
+        candidates = [2, 4, 8, 16]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = (
+            -0.00121968604182412 * shape_detail_C
+            - 0.0146597102269414 * shape_detail_H
+            - 0.0439749277051885 * shape_detail_N
+            - 0.0146597102269413 * shape_detail_W
+            + 7.02980543990727
+        )
+        candidates = [2, 4, 8, 16]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 # ===---------------------------------------------------------------------------------===
@@ -201,6 +284,7 @@ shapegen = ShapeGenerator(
         gen_form_detail_Ho,
         gen_form_detail_Wo,
     ),
+    [constraint_HW_equal],
 )
 
 # print(shapegen.generate())

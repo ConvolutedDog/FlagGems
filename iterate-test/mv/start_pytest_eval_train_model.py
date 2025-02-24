@@ -10,6 +10,7 @@ from performance_utils import (
     ShapeGenerator,
     TunedConfigGenerator,
     archive_file_with_timestamp,
+    get_gpu_name,
     print_centered_label,
     read_config_from_yaml,
     run_perf_pytest,
@@ -135,66 +136,120 @@ def constraint_MN_equal(**kwargs):
 # use predefined formulas to calculate optimal values for each parameter.
 # ===---------------------------------------------------------------------------------===
 
+current_gpu_name = get_gpu_name()
+
 
 # Define functions to generate parameters
 def gen_block_m(shape_detail_M, shape_detail_N):
-    """
-    def gen_block_m(shape_detail_M, shape_detail_N):
-            res = -0.000229779411764706*shape_detail_M + 0.000344669117647059*shape_detail_N + 63.0
-    """
-    res = (
-        -0.000229779411764706 * shape_detail_M
-        + 0.000344669117647059 * shape_detail_N
-        + 63.0
-    )
-    trainsets = [16, 32, 64]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = (
+            -0.000229779411764706 * shape_detail_M
+            + 0.000344669117647059 * shape_detail_N
+            + 63.0
+        )
+        candidates = [16, 32, 64]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = (
+            0.000959329044117647 * shape_detail_M
+            - 0.00048828125 * shape_detail_N
+            + 56.075
+        )
+        candidates = [16, 32, 64]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = (
+            -0.000298713235294118 * shape_detail_M
+            + 0.000413602941176471 * shape_detail_N
+            + 62.75
+        )
+        candidates = [16, 32, 64]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 def gen_block_n(shape_detail_M, shape_detail_N):
-    """
-    def gen_block_n(shape_detail_M, shape_detail_N):
-            res = 6.31893382352941e-5*shape_detail_M - 8.61672794117647e-5*shape_detail_N + 16.225
-    """
-    res = (
-        6.31893382352941e-5 * shape_detail_M
-        + -8.61672794117647e-5 * shape_detail_N
-        + 16.225
-    )
-    trainsets = [16, 32, 64]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = (
+            6.31893382352941e-5 * shape_detail_M
+            - 8.61672794117647e-5 * shape_detail_N
+            + 16.225
+        )
+        candidates = [16, 32, 64]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = 16.0000000000000
+        candidates = [16, 32, 64]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = (
+            0.000163717830882353 * shape_detail_M
+            - 0.000387752757352941 * shape_detail_N
+            + 17.5375
+        )
+        candidates = [16, 32, 64]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 def gen_warps(shape_detail_M, shape_detail_N):
-    """
-    def gen_warps(shape_detail_M, shape_detail_N):
-            res = -1.29250919117647e-5*shape_detail_M + 2.15418198529412e-5*shape_detail_N + 7.93125
-    """
-    res = (
-        -1.29250919117647e-5 * shape_detail_M
-        + 2.15418198529412e-5 * shape_detail_N
-        + 7.93125
-    )
-    trainsets = [1, 4, 8]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = (
+            -1.29250919117647e-5 * shape_detail_M
+            + 2.15418198529412e-5 * shape_detail_N
+            + 7.93125
+        )
+        candidates = [1, 4, 8]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = 8.00000000000000
+        candidates = [1, 4, 8]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = (
+            -3.23127297794117e-5 * shape_detail_M
+            + 5.09823069852941e-5 * shape_detail_N
+            + 7.840625
+        )
+        candidates = [1, 4, 8]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 def gen_stages(shape_detail_M, shape_detail_N):
-    """
-    ef gen_stages(shape_detail_M, shape_detail_N):
-            res = 3.9493336397059e-6*shape_detail_M - 9.33478860294117e-6*shape_detail_N + 1.8359375
-    """
-    res = (
-        3.9493336397059e-6 * shape_detail_M
-        + -9.33478860294117e-6 * shape_detail_N
-        + 1.8359375
-    )
-    trainsets = [1, 2, 3]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        res = (
+            3.9493336397059e-6 * shape_detail_M
+            - 9.33478860294117e-6 * shape_detail_N
+            + 1.8359375
+        )
+        candidates = [1, 2, 3]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = (
+            1.31046070772059e-5 * shape_detail_M
+            - 1.09504250919118e-5 * shape_detail_N
+            + 2.08046875
+        )
+        candidates = [1, 2, 3]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = (
+            3.44669117647059e-5 * shape_detail_M
+            + 2.90814568014706e-5 * shape_detail_N
+            + 1.528125
+        )
+        candidates = [1, 2, 3]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 # ===---------------------------------------------------------------------------------===

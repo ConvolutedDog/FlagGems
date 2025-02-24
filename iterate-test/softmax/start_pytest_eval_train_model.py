@@ -10,6 +10,7 @@ from performance_utils import (
     ShapeGenerator,
     TunedConfigGenerator,
     archive_file_with_timestamp,
+    get_gpu_name,
     print_centered_label,
     read_config_from_yaml,
     run_perf_pytest,
@@ -117,27 +118,28 @@ archive_file_with_timestamp(result_file)
 # correspond to the name in "Shape parameters" and "Auto-tune configs" in excel_config.
 def gen_shape_detail_M():
     # return list(range(512, 8192 + 1, 512))
-    return [1024]
+    return [1]
 
 
 # Cause the input_fn of softmax set the dim = 1, so this needs to define N != 1
 def gen_shape_detail_N():
-    # return list(range(512, 524288 + 1, 512))
-    return [1024]
+    return list(range(512, 8192 + 1, 512))
+    # return [1024]
 
 
 def gen_shape_detail_K():
     # return list(range(512, 8192 + 1, 512))
-    return [1024]
+    return [1]
 
 
 def gen_form_detail_dim():
-    return [
-        None,
-        0,
-        1,
-        2,
-    ]
+    # return [
+    #     None,
+    #     0,
+    #     1,
+    #     2,
+    # ]
+    return [None]
 
 
 # ===---------------------------------------------------------------------------------===
@@ -148,14 +150,28 @@ def gen_form_detail_dim():
 # use predefined formulas to calculate optimal values for each parameter.
 # ===---------------------------------------------------------------------------------===
 
+current_gpu_name = get_gpu_name()
+
 
 # Define functions to generate parameters
 def gen_TILE_K(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim):
-    """
-    TILE_K: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
-    """
-    res = 5.02754660e-5 * shape_detail_M + 5.70746029e-05 * shape_detail_N + 0.951953125
-    return 2 ** (round(res + 5))
+    # if current_gpu_name == "NVIDIA GeForce RTX 4090":
+    #     res = 0.000260571964854088*shape_detail_N + 602.250916422287
+    #     candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+    #     closest_value = min(candidates, key=lambda x: abs(x - res))
+    #     return closest_value
+    # elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+    #     res = 1114.91028225806 - 0.000473886365312746*shape_detail_N
+    #     candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+    #     closest_value = min(candidates, key=lambda x: abs(x - res))
+    #     return closest_value
+    # elif current_gpu_name == "Quadro GV100":
+    #     res = 0.000302039724112188*shape_detail_N + 574.526026392962
+    #     candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+    #     closest_value = min(candidates, key=lambda x: abs(x - res))
+    #     return closest_value
+
+    return 1024
 
 
 # ===---------------------------------------------------------------------------------===
