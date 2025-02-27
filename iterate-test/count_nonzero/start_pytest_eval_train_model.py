@@ -30,8 +30,8 @@ pytest_operation_name = "count_nonzero"
 pytest_data_type = "float16"
 
 pytest_verbose = True
-pytest_warmup_runs = 3
-pytest_iter_runs = 3
+pytest_warmup_runs = 1000
+pytest_iter_runs = 3000
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -162,20 +162,28 @@ def constraint_HW_equal(**kwargs):
 
 current_gpu_name = get_gpu_name()
 
+import numpy as np
+
 
 # Define functions to generate parameters
 def gen_block_m(
     shape_detail_N, shape_detail_C, shape_detail_H, shape_detail_W, form_detail_dim
 ):
     if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        # res = -0.0522748161764706*shape_detail_H - 0.0156939338235294*shape_detail_W + 1273.3
+        # candidates = [128, 256, 512, 1024, 2048, 4096]
+        # closest_value = min(candidates, key=lambda x: abs(x - res))
+        # return closest_value # 2025-02-21
         res = (
-            -0.0522748161764706 * shape_detail_H
-            - 0.0156939338235294 * shape_detail_W
-            + 1273.3
+            -318.865496936079 * np.log(shape_detail_H)
+            - 44.7655305468913 * np.log(shape_detail_W)
+            + 0.0445151207551771 * shape_detail_H
+            - 0.00210559353592998 * shape_detail_W
+            + 3758.45963104152
         )
         candidates = [128, 256, 512, 1024, 2048, 4096]
         closest_value = min(candidates, key=lambda x: abs(x - res))
-        return closest_value
+        return closest_value  # 2025-02-27
     elif current_gpu_name == "NVIDIA H100 80GB HBM3":
         res = (
             0.0334558823529412 * shape_detail_H
@@ -200,14 +208,20 @@ def gen_warps(
     shape_detail_N, shape_detail_C, shape_detail_H, shape_detail_W, form_detail_dim
 ):
     if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        # res = -0.000252757352941176*shape_detail_H - 3.80572150735295e-5*shape_detail_W + 12.375
+        # candidates = [2, 4, 8, 16, 32]
+        # closest_value = min(candidates, key=lambda x: abs(x - res))
+        # return closest_value # 2025-02-21
         res = (
-            -0.000252757352941176 * shape_detail_H
-            - 3.80572150735295e-5 * shape_detail_W
-            + 12.375
+            0.976441302060292 * np.log(shape_detail_H)
+            - 0.0355126363555557 * np.log(shape_detail_W)
+            - 0.000549150951345514 * shape_detail_H
+            - 2.72775419318805e-5 * shape_detail_W
+            + 5.94442131180325
         )
         candidates = [2, 4, 8, 16, 32]
         closest_value = min(candidates, key=lambda x: abs(x - res))
-        return closest_value
+        return closest_value  # 2025-02-27
     elif current_gpu_name == "NVIDIA H100 80GB HBM3":
         res = (
             -0.000331744025735294 * shape_detail_H

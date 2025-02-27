@@ -30,8 +30,8 @@ pytest_operation_name = "randperm"
 pytest_data_type = "int32"
 
 pytest_verbose = True
-pytest_warmup_runs = 3
-pytest_iter_runs = 3
+pytest_warmup_runs = 1000
+pytest_iter_runs = 3000
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -127,14 +127,24 @@ def gen_shape_detail_M():
 
 current_gpu_name = get_gpu_name()
 
+import numpy as np
+
 
 # Define functions to generate parameters
 def gen_warps(shape_detail_M):
     if current_gpu_name == "NVIDIA GeForce RTX 4090":
-        res = 10.1605800953079 - 1.87550391875302e-5 * shape_detail_M
+        # res = 10.1605800953079 - 1.87550391875302e-5 * shape_detail_M
+        # candidates = [1, 2, 4, 8, 16, 32]
+        # closest_value = min(candidates, key=lambda x: abs(x - res))
+        # return closest_value # 2025-02-21
+        res = (
+            -2.76640856892488 * np.log(shape_detail_M)
+            - 3.03023645189751e-6 * shape_detail_M
+            + 39.7128667138457
+        )
         candidates = [1, 2, 4, 8, 16, 32]
         closest_value = min(candidates, key=lambda x: abs(x - res))
-        return closest_value
+        return closest_value  # 2025-02-27
     elif current_gpu_name == "NVIDIA H100 80GB HBM3":
         res = 5.81045523277126 - 3.78829642824413e-6 * shape_detail_M
         candidates = [1, 2, 4, 8, 16, 32]

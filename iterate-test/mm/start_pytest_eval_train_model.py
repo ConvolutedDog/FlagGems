@@ -10,6 +10,7 @@ from performance_utils import (
     ShapeGenerator,
     TunedConfigGenerator,
     archive_file_with_timestamp,
+    get_gpu_name,
     print_centered_label,
     read_config_from_yaml,
     run_perf_pytest,
@@ -29,8 +30,8 @@ pytest_operation_name = "mm"
 pytest_data_type = "float16"
 
 pytest_verbose = True
-pytest_warmup_runs = 10
-pytest_iter_runs = 30
+pytest_warmup_runs = 1000
+pytest_iter_runs = 3000
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -142,127 +143,96 @@ def constraint_MNK_equal(**kwargs):
 # use predefined formulas to calculate optimal values for each parameter.
 # ===---------------------------------------------------------------------------------===
 
+current_gpu_name = get_gpu_name()
 
-def discretize_to_multiple(x, multiple):
-    return round(x / multiple) * multiple
-
-
-# # Define functions to generate parameters
-# def gen_BLOCK_M(shape_detail_M, shape_detail_N, shape_detail_K):
-#     """
-#     block m: 5.02754660e-5  1.24650843e-05 5.70746029e-05 0.951953125 5
-#     """
-#     res = (
-#         5.02754660e-5 * shape_detail_M
-#         + 1.24650843e-05 * shape_detail_K
-#         + 5.70746029e-05 * shape_detail_N
-#         + 0.951953125
-#     )
-#     return 2 ** (round(res + 5))
-
-
-# def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
-#     """
-#     bolck k: -4.32182761e-05 1.28128949e-05 -4.64046703e-05 0.47832031249999984 5
-#     """
-#     res = (
-#         -4.32182761e-05 * shape_detail_M
-#         + 1.28128949e-05 * shape_detail_K
-#         + -4.64046703e-05 * shape_detail_N
-#         + 0.47832031249999984
-#     )
-#     return 2 ** (round(res + 5))
-
-
-# def gen_BLOCK_N(shape_detail_M, shape_detail_N, shape_detail_K):
-#     """
-#     block n: 4.52714808e-05 -7.57329604e-06 3.63630407e-05 0.52656250 6
-#     """
-#     res = (
-#         4.52714808e-05 * shape_detail_M
-#         + -7.57329604e-06 * shape_detail_K
-#         + 3.63630407e-05 * shape_detail_N
-#         + 0.52656250
-#     )
-#     return 2 ** (round(res + 6))
-
-
-# def gen_SPLIT_K(shape_detail_M, shape_detail_N, shape_detail_K):
-#     return 1
-
-
-# def gen_num_stages(shape_detail_M, shape_detail_N, shape_detail_K):
-#     """
-#     num stages: -1.34748571e-05 -7.30402329e-06 -6.40644747e-06 1.0521484374999996 1
-#     """
-#     res = (
-#         -1.34748571e-05 * shape_detail_M
-#         + -7.30402329e-06 * shape_detail_K
-#         + -6.40644747e-06 * shape_detail_N
-#         + 1.0521484374999996
-#     )
-#     return 2 ** (round(res + 1))
-
-
-# def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
-#     """
-#     num warps: -1.61563649e-05 2.72414264e-05 -2.95751235e-05 1.27919921875 1
-#     """
-#     res = (
-#         -1.61563649e-05 * shape_detail_M
-#         + 2.72414264e-05 * shape_detail_K
-#         + -2.95751235e-05 * shape_detail_N
-#         + 1.27919921875
-#     )
-#     return 2 ** (round(res + 1))
+import numpy as np
 
 
 def gen_BLOCK_M(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    def gen_BLOCK_M(shape_detail_M, shape_detail_N, shape_detail_K):
-            res = 0.00331313189338235*shape_detail_K + 0.00383588005514706*shape_detail_M + 0.00230210248161765*shape_detail_N + 54.0875
-    """
-    res = (
-        0.00331313189338235 * shape_detail_K
-        + 0.00383588005514706 * shape_detail_M
-        + 0.00230210248161765 * shape_detail_N
-        + 54.0875
-    )
-    trainsets = [32, 64, 128, 256]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        # res = (
+        #     0.00331313189338235 * shape_detail_K
+        #     + 0.00383588005514706 * shape_detail_M
+        #     + 0.00230210248161765 * shape_detail_N
+        #     + 54.0875
+        # )
+        # trainsets = [32, 64, 128, 256]
+        # closest_value = min(trainsets, key=lambda x: abs(x - res))
+        # return closest_value # 2015-02-21
+        res = (
+            -16.4416633774714 * np.log(shape_detail_K)
+            + 8.84015266594844 * np.log(shape_detail_M)
+            - 14.0015276484632 * np.log(shape_detail_N)
+            + 0.00830391194531081 * shape_detail_K
+            + 0.0011524984186108 * shape_detail_M
+            + 0.0065521922249836 * shape_detail_N
+            + 201.728913362594
+        )
+        candidates = [32, 64, 128, 256]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value  # 2015-02-27
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        pass
+    elif current_gpu_name == "Quadro GV100":
+        pass
 
 
 def gen_BLOCK_N(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    def gen_BLOCK_N(shape_detail_M, shape_detail_N, shape_detail_K):
-            res = -0.00102467256433823*shape_detail_K + 0.00125732421875*shape_detail_M + 0.00430908203124999*shape_detail_N + 110.90625
-    """
-    res = (
-        -0.00102467256433823 * shape_detail_K
-        + 0.00125732421875 * shape_detail_M
-        + 0.00430908203124999 * shape_detail_N
-        + 110.90625
-    )
-    trainsets = [32, 64, 128, 256]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        # res = (
+        #     -0.00102467256433823 * shape_detail_K
+        #     + 0.00125732421875 * shape_detail_M
+        #     + 0.00430908203124999 * shape_detail_N
+        #     + 110.90625
+        # )
+        # trainsets = [32, 64, 128, 256]
+        # closest_value = min(trainsets, key=lambda x: abs(x - res))
+        # return closest_value # 2015-02-21
+        res = (
+            13.2924243121098 * np.log(shape_detail_K)
+            + 1.18067698516382 * np.log(shape_detail_M)
+            + 13.5143616845211 * np.log(shape_detail_N)
+            - 0.00505951773636297 * shape_detail_K
+            + 0.000898935957778755 * shape_detail_M
+            + 0.000206868942391525 * shape_detail_N
+            - 80.3681680799561
+        )
+        candidates = [32, 64, 128, 256]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value  # 2015-02-27
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        pass
+    elif current_gpu_name == "Quadro GV100":
+        pass
 
 
 def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    def gen_BLOCK_K(shape_detail_M, shape_detail_N, shape_detail_K):
-            res = 0.000849106732536766*shape_detail_K - 0.00174524643841912*shape_detail_M - 0.00165477079503677*shape_detail_N + 49.46875
-    """
-    res = (
-        0.000849106732536766 * shape_detail_K
-        + -0.00174524643841912 * shape_detail_M
-        + -0.00165477079503677 * shape_detail_N
-        + 49.46875
-    )
-    trainsets = [32, 64, 128]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        # res = (
+        #     0.000849106732536766 * shape_detail_K
+        #     + -0.00174524643841912 * shape_detail_M
+        #     + -0.00165477079503677 * shape_detail_N
+        #     + 49.46875
+        # )
+        # trainsets = [32, 64, 128]
+        # closest_value = min(trainsets, key=lambda x: abs(x - res))
+        # return closest_value # 2015-02-21
+        res = (
+            0.924693121302579 * np.log(shape_detail_K)
+            - 17.0253564082307 * np.log(shape_detail_M)
+            - 18.6519896087864 * np.log(shape_detail_N)
+            + 0.000568421021000007 * shape_detail_K
+            + 0.00342271054916868 * shape_detail_M
+            + 0.00400694210658514 * shape_detail_N
+            + 286.978432949335
+        )
+        candidates = [32, 64, 128]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value  # 2015-02-27
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        pass
+    elif current_gpu_name == "Quadro GV100":
+        pass
 
 
 def gen_SPLIT_K(shape_detail_M, shape_detail_N, shape_detail_K):
@@ -271,19 +241,32 @@ def gen_SPLIT_K(shape_detail_M, shape_detail_N, shape_detail_K):
 
 
 def gen_num_stages(shape_detail_M, shape_detail_N, shape_detail_K):
-    """
-    def gen_num_stages(shape_detail_M, shape_detail_N, shape_detail_K):
-            res = 2.89468204273897e-5*shape_detail_K - 1.64480770335478e-5*shape_detail_M - 4.78183521943934e-5*shape_detail_N + 3.699609375
-    """
-    res = (
-        2.89468204273897e-5 * shape_detail_K
-        + -1.64480770335478e-5 * shape_detail_M
-        + -4.78183521943934e-5 * shape_detail_N
-        + 3.699609375
-    )
-    trainsets = [2, 3, 4, 5]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        # res = (
+        #     2.89468204273897e-5 * shape_detail_K
+        #     + -1.64480770335478e-5 * shape_detail_M
+        #     + -4.78183521943934e-5 * shape_detail_N
+        #     + 3.699609375
+        # )
+        # trainsets = [2, 3, 4, 5]
+        # closest_value = min(trainsets, key=lambda x: abs(x - res))
+        # return closest_value # 2015-02-21
+        res = (
+            0.140726590493495 * np.log(shape_detail_K)
+            - 0.119341599811431 * np.log(shape_detail_M)
+            - 0.222357270090079 * np.log(shape_detail_N)
+            - 1.37699926155773e-5 * shape_detail_K
+            + 1.97774350712814e-5 * shape_detail_M
+            + 1.96770223604287e-5 * shape_detail_N
+            + 5.07311206865169
+        )
+        candidates = [2, 3, 4, 5]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value  # 2015-02-27
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        pass
+    elif current_gpu_name == "Quadro GV100":
+        pass
 
 
 def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
@@ -291,15 +274,33 @@ def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
     def gen_num_warps(shape_detail_M, shape_detail_N, shape_detail_K):
             res = 0.000163044649011948*shape_detail_K - 0.000185125014361214*shape_detail_M - 0.000130238252527574*shape_detail_N + 5.8279296875
     """
-    res = (
-        0.000163044649011948 * shape_detail_K
-        + -0.000185125014361214 * shape_detail_M
-        + -0.000130238252527574 * shape_detail_N
-        + 5.8279296875
-    )
-    trainsets = [2, 4]
-    closest_value = min(trainsets, key=lambda x: abs(x - res))
-    return closest_value
+
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        # res = (
+        #     0.000163044649011948 * shape_detail_K
+        #     + -0.000185125014361214 * shape_detail_M
+        #     + -0.000130238252527574 * shape_detail_N
+        #     + 5.8279296875
+        # )
+        # trainsets = [2, 4]
+        # closest_value = min(trainsets, key=lambda x: abs(x - res))
+        # return closest_value # 2015-02-21
+        res = (
+            0.398926553727418 * np.log(shape_detail_K)
+            + 0.122707432836652 * np.log(shape_detail_M)
+            + 0.312073825010493 * np.log(shape_detail_N)
+            + 4.19526012781772e-5 * shape_detail_K
+            - 0.000222372207298131 * shape_detail_M
+            - 0.000224966613328673 * shape_detail_N
+            + 0.130129332699289
+        )
+        candidates = [2, 4]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value  # 2015-02-27
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        pass
+    elif current_gpu_name == "Quadro GV100":
+        pass
 
 
 # ===---------------------------------------------------------------------------------===

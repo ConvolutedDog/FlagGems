@@ -30,8 +30,8 @@ pytest_operation_name = "mean"
 pytest_data_type = "float16"
 
 pytest_verbose = True
-pytest_warmup_runs = 3
-pytest_iter_runs = 3
+pytest_warmup_runs = 1000
+pytest_iter_runs = 3000
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -153,14 +153,24 @@ def gen_form_detail_dim():
 
 current_gpu_name = get_gpu_name()
 
+import numpy as np
+
 
 # Define functions to generate parameters
 def gen_block_m(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim):
     if current_gpu_name == "NVIDIA GeForce RTX 4090":
-        res = 4.36907119483584e-7 * shape_detail_M + 7.84629307184751
+        # res = 4.36907119483584e-7 * shape_detail_M + 7.84629307184751
+        # candidates = [1, 2, 4, 8]
+        # closest_value = min(candidates, key=lambda x: abs(x - res))
+        # return closest_value # 2015-02-21
+        res = (
+            0.418779500336853 * np.log(shape_detail_M)
+            - 1.9435167652946e-6 * shape_detail_M
+            + 3.3726618219514
+        )
         candidates = [1, 2, 4, 8]
         closest_value = min(candidates, key=lambda x: abs(x - res))
-        return closest_value
+        return closest_value  # 2015-02-27
     elif current_gpu_name == "NVIDIA H100 80GB HBM3":
         res = 2.40565216018615e-7 * shape_detail_M + 7.91539131231672
         candidates = [1, 2, 4, 8]
@@ -175,10 +185,18 @@ def gen_block_m(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim)
 
 def gen_block_n(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim):
     if current_gpu_name == "NVIDIA GeForce RTX 4090":
-        res = 68.2030791788856 - 1.1968670651241e-5 * shape_detail_M
+        # res = 68.2030791788856 - 1.1968670651241e-5 * shape_detail_M
+        # candidates = [64, 128, 256, 512, 1024, 2048]
+        # closest_value = min(candidates, key=lambda x: abs(x - res))
+        # return closest_value # 2015-02-21
+        res = (
+            -10.9081956203268 * np.log(shape_detail_M)
+            + 5.00356284454731e-5 * shape_detail_M
+            + 184.73037998473
+        )
         candidates = [64, 128, 256, 512, 1024, 2048]
         closest_value = min(candidates, key=lambda x: abs(x - res))
-        return closest_value
+        return closest_value  # 2015-02-27
     elif current_gpu_name == "NVIDIA H100 80GB HBM3":
         res = 65.4871700879765 - 4.23845307917888e-6 * shape_detail_M
         candidates = [64, 128, 256, 512, 1024, 2048]
@@ -193,10 +211,18 @@ def gen_block_n(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim)
 
 def gen_warps(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim):
     if current_gpu_name == "NVIDIA GeForce RTX 4090":
-        res = 4.26365469208211 - 7.51709001837315e-7 * shape_detail_M
+        # res = 4.26365469208211 - 7.51709001837315e-7 * shape_detail_M
+        # candidates = [4, 8, 16, 32]
+        # closest_value = min(candidates, key=lambda x: abs(x - res))
+        # return closest_value # 2015-02-21
+        res = (
+            -0.955946845806243 * np.log(shape_detail_M)
+            + 4.68207823585021e-6 * shape_detail_M
+            + 14.4756007859059
+        )
         candidates = [4, 8, 16, 32]
         closest_value = min(candidates, key=lambda x: abs(x - res))
-        return closest_value
+        return closest_value  # 2015-02-27
     elif current_gpu_name == "NVIDIA H100 80GB HBM3":
         res = 4.78482404692082 - 2.21684088003362e-6 * shape_detail_M
         candidates = [4, 8, 16, 32]

@@ -30,8 +30,8 @@ pytest_operation_name = "softmax"
 pytest_data_type = "float16"
 
 pytest_verbose = True
-pytest_warmup_runs = 3
-pytest_iter_runs = 3
+pytest_warmup_runs = 1000
+pytest_iter_runs = 3000
 
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
@@ -152,26 +152,34 @@ def gen_form_detail_dim():
 
 current_gpu_name = get_gpu_name()
 
+import numpy as np
+
 
 # Define functions to generate parameters
 def gen_TILE_K(shape_detail_M, shape_detail_N, shape_detail_K, form_detail_dim):
-    # if current_gpu_name == "NVIDIA GeForce RTX 4090":
-    #     res = 0.000260571964854088*shape_detail_N + 602.250916422287
-    #     candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
-    #     closest_value = min(candidates, key=lambda x: abs(x - res))
-    #     return closest_value
-    # elif current_gpu_name == "NVIDIA H100 80GB HBM3":
-    #     res = 1114.91028225806 - 0.000473886365312746*shape_detail_N
-    #     candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
-    #     closest_value = min(candidates, key=lambda x: abs(x - res))
-    #     return closest_value
-    # elif current_gpu_name == "Quadro GV100":
-    #     res = 0.000302039724112188*shape_detail_N + 574.526026392962
-    #     candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
-    #     closest_value = min(candidates, key=lambda x: abs(x - res))
-    #     return closest_value
-
-    return 1024
+    if current_gpu_name == "NVIDIA GeForce RTX 4090":
+        # res = 0.000260571964854088*shape_detail_N + 602.250916422287
+        # candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+        # closest_value = min(candidates, key=lambda x: abs(x - res))
+        # return closest_value # 2025-02-21
+        res = (
+            -33.2321107365075 * np.log(shape_detail_N)
+            + 0.000449469726265869 * shape_detail_N
+            + 957.254465954353
+        )
+        candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value  # 2025-02-27
+    elif current_gpu_name == "NVIDIA H100 80GB HBM3":
+        res = 1114.91028225806 - 0.000473886365312746 * shape_detail_N
+        candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
+    elif current_gpu_name == "Quadro GV100":
+        res = 0.000302039724112188 * shape_detail_N + 574.526026392962
+        candidates = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096]
+        closest_value = min(candidates, key=lambda x: abs(x - res))
+        return closest_value
 
 
 # ===---------------------------------------------------------------------------------===
