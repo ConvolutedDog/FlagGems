@@ -4,7 +4,7 @@ import pandas as pd
 
 # ===================================
 input_log = "results/count_nonzero-result.txt"
-output_excel = "results/count_nonzero-result.csv"
+output_excel = "results/count_nonzero-result-eval-model-512-512-8192-512-512-8192-4090-20250227.csv"
 # ===================================
 
 f = open(input_log, "r")

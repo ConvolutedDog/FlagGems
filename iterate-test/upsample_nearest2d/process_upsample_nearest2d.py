@@ -4,7 +4,7 @@ import pandas as pd
 
 # ===================================
 input_log = "results/upsample_nearest2d-result.txt"
-output_excel = "results/upsample_nearest2d-result-512-512-524288.csv"
+output_excel = "results/upsample_nearest2d-result-512-512-524288-4090-20250227.csv"
 # ===================================
 
 f = open(input_log, "r")

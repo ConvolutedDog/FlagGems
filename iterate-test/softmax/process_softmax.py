@@ -4,7 +4,9 @@ import pandas as pd
 
 # ===================================
 input_log = "results/softmax-result.txt"
-output_excel = "results/softmax-result.csv"
+output_excel = (
+    "results/softmax-result-result-eval-model-1-512-512-8192-1-4090-20250227.csv"
+)
 # ===================================
 
 f = open(input_log, "r")

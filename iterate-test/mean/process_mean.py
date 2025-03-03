@@ -4,7 +4,7 @@ import pandas as pd
 
 # ===================================
 input_log = "results/mean-result.txt"
-output_excel = "results/mean-result.csv"
+output_excel = "results/mean-result-eval-model-512-512-8192-4090-20250227.csv"
 # ===================================
 
 f = open(input_log, "r")
