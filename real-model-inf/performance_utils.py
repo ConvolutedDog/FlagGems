@@ -183,6 +183,401 @@ def triton_testing_do_bench_rewritting(
     return getattr(torch, return_mode)(times).item()
 
 
+class RealModelBenchmark:
+    device: str = device
+    # ['latency_base', 'latency', 'speedup']
+    DEFAULT_METRICS = DEFAULT_METRICS
+    # [torch.float16, torch.float32, torch.bfloat16]
+    DEFAULT_DTYPES = FLOAT_DTYPES
+    DEFAULT_SHAPES = DEFAULT_SHAPES
+    DEFAULT_SHAPE_DESC = "B, C, H, W"
+    DEFAULT_SHAPE_FILES = "core_shapes.yaml"
+    """
+    the base class for the real model benchmark
+    """
+
+    def __init__(
+        self,
+        real_model_name,
+        # torch_op,
+        torch_real_model,
+        dtypes=None,
+        is_backward=False,
+        **kwargs,
+    ):
+        # In `test_bert_perf.py`:
+        # pytest.param(
+        #     "bert",                 # self.real_model_name
+        #     model,                  # self.torch_real_model
+        #     bert_input_fn,          # BERTSMALLBenchmark::input_fn
+        #     marks=pytest.mark.bert,
+        # ),
+        self.real_model_name = real_model_name
+        self.torch_real_model = torch_real_model
+        # False
+        if is_backward:
+            self.real_model_name += " backward"
+        self.is_backward = is_backward
+        self._input_iter = None
+
+        # Theoretical supported dtypes, metrics for the operation.
+        # These are set by default.
+
+        # [torch.float16, torch.float32, torch.bfloat16]
+        self.dtypes = dtypes if dtypes is not None else self.DEFAULT_DTYPES
+        # ['latency_base', 'latency', 'speedup']
+        self.metrics = self.DEFAULT_METRICS
+        self.shapes = self.DEFAULT_SHAPES
+        self.shape_desc = self.DEFAULT_SHAPE_DESC
+        # "core_shapes.yaml"
+        self.shape_file = self.DEFAULT_SHAPE_FILES
+
+        # Actual dtypes and metrics to be used in the benchmark,
+        # can be influenced by user input.
+        self.to_bench_dtypes = self.dtypes
+        self.to_bench_metrics = self.metrics
+
+        self.return_all_times = False
+
+        # additional properties
+        for k in kwargs:
+            if hasattr(self, k):
+                setattr(self, k, kwargs[k])
+
+    def set_metrics(self, user_desired_metrics: Optional[List[str]]):
+        # Validate user-specified metrics
+        if user_desired_metrics:
+            invalid_metrics = [
+                metric for metric in user_desired_metrics if metric not in self.metrics
+            ]
+            if invalid_metrics:
+                raise ValueError(
+                    f"Invalid metrics: {', '.join(invalid_metrics)} for real model: '{self.real_model_name}'"
+                )
+            unsatisfied_metrics = check_metric_dependencies(user_desired_metrics)
+            if unsatisfied_metrics:
+                raise ValueError(
+                    f"Unsatisfied metric dependencies: {', '.join(unsatisfied_metrics)}"
+                )
+
+        self.to_bench_metrics = user_desired_metrics or self.metrics
+        if (
+            hasattr(self, "set_more_metrics")
+            and callable(getattr(self, "set_more_metrics"))
+            and Config.bench_level == BenchLevel.COMPREHENSIVE
+            and not Config.query
+        ):
+            for metric in self.set_more_metrics():
+                if metric not in self.to_bench_metrics:
+                    self.to_bench_metrics.append(metric)
+
+    def set_more_metrics(self):
+        """Base method (optional to override in subclasses). Returns additional shapes if applicable."""
+        return []
+
+    def set_dtypes(self, user_desired_dtypes: Optional[List[torch.dtype]]):
+        # Validate user-specified dtypes
+        if user_desired_dtypes and not all(
+            dtype in self.dtypes for dtype in user_desired_dtypes
+        ):
+            invalid_dtypes = [
+                dtype for dtype in user_desired_dtypes if dtype not in self.dtypes
+            ]
+            raise ValueError(
+                f"Given dtype(s) '{', '.join(str(dtype) for dtype in invalid_dtypes)}'"
+                f"can't be supported by this real model '{self.real_model_name}'"
+            )
+        self.to_bench_dtypes = (
+            user_desired_dtypes if user_desired_dtypes else self.dtypes
+        )
+
+    def set_shapes(self, shape_file_path: Optional[List[Any]] = None):
+        # Validate user-spicified shapes files
+        import os
+
+        if not os.path.isfile(shape_file_path):
+            raise FileNotFoundError(f"Shape file '{shape_file_path}' does not exist.")
+        try:
+            with open(shape_file_path, "r") as file:
+                yaml_config = yaml.safe_load(file)
+                if self.real_model_name in yaml_config:
+                    self.shapes = yaml_config[self.real_model_name].get(
+                        "shapes", self.DEFAULT_SHAPES
+                    )
+                    self.shape_desc = yaml_config[self.real_model_name].get(
+                        "shape_desc", self.DEFAULT_SHAPE_DESC
+                    )
+                else:
+                    for cls in type(self).__mro__:
+                        class_name = cls.__name__
+                        if class_name in yaml_config:
+                            self.shapes = yaml_config[class_name].get(
+                                "shapes", self.DEFAULT_SHAPES
+                            )
+                            self.shape_desc = yaml_config[class_name].get(
+                                "shape_desc", self.DEFAULT_SHAPE_DESC
+                            )
+                            break
+                    else:
+                        self.shapes = self.DEFAULT_SHAPES
+
+            self.shapes = [tuple(shape) for shape in self.shapes]
+            # merge shapes from subclass If subclass has `set_more_shapes`, call it to merge shapes
+            if (
+                # If the subclass has overwittend the `set_more_shapes` func.
+                hasattr(self, "set_more_shapes")
+                and callable(getattr(self, "set_more_shapes"))
+                and Config.bench_level == BenchLevel.COMPREHENSIVE
+                # If we set `Config.query`, we read form `core_shapes.yaml`.
+                and not Config.query
+            ):
+                # Merge shapes using subclass-specific logic
+                additional_shapes = self.set_more_shapes()
+                # self.shapes = additional_shapes
+                if additional_shapes:
+                    self.shapes = list(dict.fromkeys(self.shapes + additional_shapes))
+        except yaml.YAMLError as e:
+            raise ValueError(
+                f"Shape file '{shape_file_path}' is not a valid YAML file. Error: {e}"
+            )
+
+    def set_more_shapes(self) -> Optional[List[List[int]]]:
+        """Base method (optional to override in subclasses). Returns additional shapes if applicable."""
+        return None
+
+    def record_shapes(self, *args, **kwargs):
+        def deep_parse(item):
+            if isinstance(item, torch.Tensor):
+                return item.size()
+            elif isinstance(item, (int, float, str, torch.dtype)):
+                return item
+            elif isinstance(item, (list, tuple)):
+                return [deep_parse(sub_item) for sub_item in item]
+            elif isinstance(item, dict):
+                return {key: deep_parse(value) for key, value in item.items()}
+            return None
+
+        parsed_args = [deep_parse(arg) for arg in args]
+        parsed_kwargs = {key: deep_parse(value) for key, value in kwargs.items()}
+        if parsed_args and parsed_kwargs:
+            return parsed_args, parsed_kwargs
+        return parsed_args if parsed_args else parsed_kwargs
+
+    def init_default_config(self):
+        # "core_shapes.yaml"
+        self.set_shapes(self.DEFAULT_SHAPE_FILES)
+
+    def init_user_config(self):
+        # TODO: device setting
+        self.cpu_mode = Config.cpu_mode
+        self.set_dtypes(Config.user_desired_dtypes)
+        self.set_metrics(Config.user_desired_metrics)
+        if vendor_name == "kunlunxin":
+            Config.shape_file = os.path.join(
+                os.path.dirname(__file__),
+                "../src/flag_gems/runtime/backend/_kunlunxin/core_shapes.yaml",
+            )  # Speed Up Benchmark Test, Big Shape Will Cause Timeout
+        self.set_shapes(Config.shape_file)
+
+    def get_latency(self, model, *args, **kwargs):
+        fn = lambda: model(*args, **kwargs)
+        if self.is_backward:
+            out = fn()
+            dout = torch.randn_like(out)
+            fn = lambda: out.backward(dout, retain_graph=True)
+        if Config.cpu_mode:
+            for i in range(Config.warm_up):
+                fn()
+            torch_device_fn.synchronize()
+            start = time.time()
+            for i in range(Config.repetition):
+                fn()
+            torch_device_fn.synchronize()
+            end = time.time()
+            latency = (end - start) / Config.repetition * 1000
+        else:
+            do_bench = (
+                triton.musa_testing.do_bench
+                if device == "musa"
+                else triton_testing_do_bench_rewritting
+            )
+            # triton_testing_do_bench_rewritting will return all times as
+            # a list if not set `return_all_times=False`.
+            latency = do_bench(
+                fn,
+                warmup=Config.warm_up,
+                rep=Config.repetition,
+                return_mode="median",
+                return_all_times=self.return_all_times,
+            )
+        # average latency in ms
+        return latency
+
+    def get_gbps(self, args, latency=None):
+        # """Return the dynamic input iterator for each Operator."""
+        raise NotImplementedError(
+            "Each Benchmark must implement its own input iterator."
+        )
+
+    def get_tflops(self, op, *args, **kwargs):
+        """This method is currently not really implemented and serves as a placeholder.
+        A proper implementation will be developed in the future."""
+        from torch.utils.flop_counter import FlopCounterMode
+
+        fn = lambda: op(*args, **kwargs)
+        with FlopCounterMode(display=False) as flop_counter:
+            fn()
+        return flop_counter.get_total_flops()
+
+    def get_input_iter(self, dtype) -> Generator:
+        # """Return the dynamic input iterator for each Operator."""
+        raise NotImplementedError(
+            "Each Benchmark must implement its own input iterator."
+        )
+
+    def get_inputs(self, dtype):
+        if self._input_iter is None:
+            self._input_iter = self.get_input_iter(dtype)
+        try:
+            return next(self._input_iter)
+        except StopIteration:
+            return None
+
+    def unpack_to_args_kwargs(self, input_tuple: Tuple[Any, ...]):
+        args = []
+        kwargs = {}
+        for item in input_tuple:
+            if (
+                isinstance(item, torch.Tensor)
+                or isinstance(item, (int, float))
+                or item is None
+                or isinstance(item, (list, tuple))
+            ):
+                args.append(item)
+            elif isinstance(item, dict):
+                kwargs.update(item)
+        if self.is_backward:
+            args = [
+                (
+                    a.clone().requires_grad_()
+                    if torch.is_tensor(a) and torch.is_floating_point(a)
+                    else a
+                )
+                for a in args
+            ]
+        return args, kwargs
+
+    def run(self):
+        if Config.query:
+            self.init_default_config()
+            attri = OperationAttribute(
+                op_name=self.real_model_name,
+                recommended_core_shapes=self.shapes,
+                shape_desc=self.shape_desc,
+            )
+            print(attri)
+            logging.info(attri.to_dict())
+            return
+        self.init_user_config()
+        for dtype in self.to_bench_dtypes:
+            metrics = []
+            for input in self.get_input_iter(dtype):
+                metric = BenchmarkMetrics()
+                try:
+                    args, kwargs = self.unpack_to_args_kwargs(input)
+                    metric.shape_detail = self.record_shapes(*args, **kwargs)
+                    if "latency_base" in self.to_bench_metrics:
+                        metric.latency_base = self.get_latency(
+                            self.torch_real_model, *args, **kwargs
+                        )
+                    if "latency" in self.to_bench_metrics:
+                        with flag_gems.use_gems():
+                            metric.latency = self.get_latency(
+                                self.torch_real_model, *args, **kwargs
+                            )
+                    if "speedup" in self.to_bench_metrics:
+                        if self.return_all_times:
+                            metric.speedup = statistics.mean(
+                                metric.latency_base
+                            ) / statistics.mean(metric.latency)
+                        else:
+                            metric.speedup = metric.latency_base / metric.latency
+                    if "gbps" in self.to_bench_metrics:
+                        if self.return_all_times:
+                            metric.gbps_base = self.get_gbps(
+                                args, latency=statistics.mean(metric.latency_base)
+                            )
+                        else:
+                            metric.gbps_base = self.get_gbps(
+                                args, latency=metric.latency_base
+                            )
+                        metric.gbps = self.get_gbps(args, latency=metric.latency)
+                    if "tflops" in self.to_bench_metrics:
+                        if self.return_all_times:
+                            metric.tflops = (
+                                self.get_tflops(self.torch_real_model, *args, **kwargs)
+                                / statistics.mean(metric.latency)
+                                / 1e12
+                                * 1e3
+                            )
+                        else:
+                            metric.tflops = (
+                                self.get_tflops(self.torch_real_model, *args, **kwargs)
+                                / metric.latency
+                                / 1e12
+                                * 1e3
+                            )
+                            # utilization = metric.tflops / metric.latency / 1e12 * 1e3
+                    if "latency_torch_compile" in self.to_bench_metrics:
+                        metric.latency_torch_compile = self.get_latency(
+                            torch.compile(
+                                self.torch_real_model,
+                                mode="max-autotune",
+                                dynamic=False,
+                                fullgraph=False,
+                                backend="inductor",
+                            ),
+                            *args,
+                            **kwargs,
+                        )
+                    if "latency_native_flaggems" in self.to_bench_metrics:
+                        raise NotImplementedError(
+                            "latency_native_flaggems is not implemented yet."
+                        )
+                    if "speedup_vs_torch_compile" in self.to_bench_metrics:
+                        if self.return_all_times:
+                            metric.speedup_vs_torch_compile = statistics.mean(
+                                metric.latency_torch_compile
+                            ) / statistics.mean(metric.latency)
+                        else:
+                            metric.speedup_vs_torch_compile = (
+                                metric.latency_torch_compile / metric.latency
+                            )
+                    if "speedup_vs_native_flaggems" in self.to_bench_metrics:
+                        raise NotImplementedError(
+                            "speedup_vs_native_flaggems is not implemented yet."
+                        )
+                    if "speedup_vs_native_flaggems_trainset" in self.to_bench_metrics:
+                        raise NotImplementedError(
+                            "speedup_vs_native_flaggems_trainset is not implemented yet."
+                        )
+                except Exception as e:
+                    metric.error_msg = str(e)
+                    pytest.fail(str(e))  # raise exception again
+                finally:
+                    metrics.append(metric)
+                    gc.collect()
+            result = BenchmarkResult(
+                level=Config.bench_level.value,
+                op_name=self.real_model_name,
+                dtype=str(dtype),
+                mode="cpu" if Config.cpu_mode else device,
+                result=metrics,
+            )
+            print(result)
+            logging.info(result.to_json())
+
+
 class Benchmark:
     device: str = device
     # ['latency_base', 'latency', 'speedup']
