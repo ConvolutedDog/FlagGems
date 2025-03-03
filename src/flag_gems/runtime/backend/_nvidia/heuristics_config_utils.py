@@ -1,6 +1,6 @@
+import numpy as np
 import torch
 import triton
-import numpy as np
 
 
 def argmax_heur_block_m(args):
@@ -225,16 +225,27 @@ def vdot_heur_block_size(args):
         return 1024
 
 
-
 def count_nonzero_heur_block_size(args):
-    res = -318.865496936079*np.log(args["shape0"]) - 44.7655305468913*np.log(args["shape1"]) + 0.0445151207551771*args["shape0"] - 0.00210559353592998*args["shape1"] + 3758.45963104152
+    res = (
+        -318.865496936079 * np.log(args["shape0"])
+        - 44.7655305468913 * np.log(args["shape1"])
+        + 0.0445151207551771 * args["shape0"]
+        - 0.00210559353592998 * args["shape1"]
+        + 3758.45963104152
+    )
     candidates = [128, 256, 512, 1024, 2048, 4096]
     closest_value = min(candidates, key=lambda x: abs(x - res))
     return closest_value
 
 
 def count_nonzero_heur_num_warps(args):
-    res = 0.976441302060292*np.log(args["shape0"]) - 0.0355126363555557*np.log(args["shape1"]) - 0.000549150951345514*args["shape0"] - 2.72775419318805e-5*args["shape1"] + 5.94442131180325
+    res = (
+        0.976441302060292 * np.log(args["shape0"])
+        - 0.0355126363555557 * np.log(args["shape1"])
+        - 0.000549150951345514 * args["shape0"]
+        - 2.72775419318805e-5 * args["shape1"]
+        + 5.94442131180325
+    )
     candidates = [2, 4, 8, 16, 32]
     closest_value = min(candidates, key=lambda x: abs(x - res))
     return closest_value
@@ -321,5 +332,5 @@ HEURISTICS_CONFIGS = {
     "count_nonzero": {
         "BLOCK_SIZE": count_nonzero_heur_block_size,
         "num_warps": count_nonzero_heur_num_warps,
-    }
+    },
 }
