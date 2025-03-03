@@ -23,9 +23,9 @@ def count_nonzero_kernel_1(x_ptr, out_ptr, numel, BLOCK_SIZE: tl.constexpr):
 
 
 @libentry()
-@triton.autotune(configs=runtime.get_tuned_config("count_nonzero"), key=["numel"])
+@triton.heuristics(runtime.get_heuristic_config("count_nonzero"))
 @triton.jit
-def count_nonzero_kernel(x_ptr, out_ptr, N, numel, BLOCK_SIZE: tl.constexpr):
+def count_nonzero_kernel(x_ptr, out_ptr, N, numel, shape0, shape1, BLOCK_SIZE: tl.constexpr):
     pid_x = tle.program_id(0)
 
     nonzero_count = tl.full((), value=0, dtype=out_ptr.dtype.element_ty)
@@ -41,9 +41,9 @@ def count_nonzero_kernel(x_ptr, out_ptr, N, numel, BLOCK_SIZE: tl.constexpr):
 
 
 @libentry()
-@triton.autotune(configs=runtime.get_tuned_config("count_nonzero"), key=["numel"])
+@triton.heuristics(runtime.get_heuristic_config("count_nonzero"))
 @triton.jit
-def count_nonzero_combin_kernel_1(x_ptr, out_ptr, N, numel, BLOCK_SIZE: tl.constexpr):
+def count_nonzero_combin_kernel_1(x_ptr, out_ptr, N, numel, shape0, shape1, BLOCK_SIZE: tl.constexpr):
     pid_x = tle.program_id(0)
     nonzero_count = tl.full((), value=0, dtype=out_ptr.dtype.element_ty)
     for start_n in range(0, N, BLOCK_SIZE):
@@ -95,13 +95,13 @@ def count_nonzero(x, dim=None):
             del out_shape[dim]
             out = torch.zeros(out_shape, dtype=torch.int64, device=x.device)
             grid = lambda meta: (triton.cdiv(numel, shape[dim]),)
-            count_nonzero_combin_kernel_1[grid](x, out, shape[dim], numel)
+            count_nonzero_combin_kernel_1[grid](x, out, shape[dim], numel, shape[0], shape[1])
             return out
         out_shape = list(shape)
         del out_shape[dim]
         out = torch.zeros(out_shape, dtype=torch.int64, device=x.device)
         grid = lambda meta: (triton.cdiv(numel, shape[dim]),)
-        count_nonzero_kernel[grid](x, out, shape[dim], numel)
+        count_nonzero_kernel[grid](x, out, shape[dim], numel, shape[0], shape[1])
         return out
     else:
         x = x.contiguous().flatten()
