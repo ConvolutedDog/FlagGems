@@ -140,6 +140,15 @@ def argmin(inp, dim=None, keepdim=False, *, dtype=None):
         M = math.prod(shape[:dim])
         K = inp.numel() // M // N
 
+        # The special case of `M=1`
+        if M == 1:
+            shape_list = list(shape)
+            shape_list[dim] = 1
+            out_index = torch.zeros(shape_list, dtype=torch.int64, device=inp.device)
+            if not keepdim:
+                out_index = torch.squeeze(out_index, dim)
+            return out_index
+
         inp = inp.contiguous()
 
         shape_list = list(shape)
@@ -151,7 +160,8 @@ def argmin(inp, dim=None, keepdim=False, *, dtype=None):
         tl_dtype, dtype_max_value = torch_dtype_to_tl_dtype_and_max_value[inp.dtype]
 
         grid = lambda meta: (
-            triton.cdiv(M, meta["BLOCK_M"]),
+            # Make sure that `BLOCK_M` does not exceed `M`
+            triton.cdiv(M, min(meta["BLOCK_M"], M)),
             K,
         )
         with torch_device_fn.device(inp.device):
