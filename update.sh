@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Define the base directory and instance list
-IterTests_HOME=/home/yangjianchao/Github/FlagGems-IterTests
-DEV=/home/yangjianchao/Github/FlagGems-dev
+IterTests_HOME=~/Github/FlagGems-IterTests
+DEV=~/Github/FlagGems-dev
 Instances=(
     "4090-1" \
     "4090-1-Five" \
