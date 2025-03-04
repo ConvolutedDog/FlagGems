@@ -84,6 +84,7 @@ class ARGMAXBenchmark(Benchmark):
             ) = shape
             shape = shape_detail_N, shape_detail_C, shape_detail_H, shape_detail_W
             inp = generate_tensor_input(shape, cur_dtype, self.device)
+            # BUG: Ther is a bug if we provide param `dim=0` for flaggems. We have to fix it.
             yield {
                 "input": inp,
                 "dim": form_detail_dim,

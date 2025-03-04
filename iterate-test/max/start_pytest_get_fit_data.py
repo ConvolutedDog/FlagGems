@@ -44,6 +44,9 @@ pytest_iter_runs = 3
 
 filter_out_repeat_comb = True
 
+# Use real params form the real models.
+pytest_custom_generator = True
+
 # Just don't edit this.
 pytest_shape_file = "configs/shape.yaml"
 
@@ -51,6 +54,8 @@ pytest_shape_file = "configs/shape.yaml"
 print_shape_config_combinations = False
 print_grouped_shape_config_combinations = False
 
+# Just don't edit this.
+pytest_constraint_real_conv_params = False
 
 # ===---------------------------------------------------------------------------------===
 # Configuration Dictionary for Reading Native Flaggems from Training Set
@@ -158,6 +163,130 @@ def gen_shape_detail_W():
     return [64]
 
 
+def read_params_from_cfg(folder_path):
+    """
+    Reads the parameters from all `.cfg` files in the folder and returns
+    the deduplicated list of parameters.
+    """
+    shapes = []
+
+    # Reverse all the *.cfg files in `folder_path`.
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".cfg"):
+            cfg_file_path = os.path.join(folder_path, filename)
+            with open(cfg_file_path, "r") as file:
+                # Skip the header of *.cfg.
+                next(file)
+                for line in file:
+                    # Parse each line.
+                    parts = line.strip().split(",")
+                    if len(parts) < 10:
+                        continue  # Maybe the format of some line is not right.
+
+                    # Extract the params of each real conv layer.
+                    output_h = int(parts[3])  # Ho
+                    output_w = int(parts[4])  # Wo
+                    out_c = int(parts[6])  # D
+
+                    for batch in [1, 4, 8, 16, 32]:
+                        # BUG: Ther is a bug if we provide param `dim=0` for flaggems.
+                        for dim in [None, 1, 2, 3]:
+                            shapes.append(
+                                {
+                                    "shape_detail_N": batch,
+                                    "shape_detail_C": out_c,
+                                    "shape_detail_H": output_h,
+                                    "shape_detail_W": output_w,
+                                    "form_detail_dim": dim,
+                                }
+                            )
+
+    return shapes
+
+
+cfg_folder_path = "../conv_params/Config/"
+
+
+def custom_generator():
+    """
+    A custom generator function that returns a list of parameter combinations.
+    """
+    params = read_params_from_cfg(cfg_folder_path)
+    return params
+
+
+# Global variable to store parameters from all .cfg files
+global_cfg_params = None
+
+
+def load_cfg_params(folder_path):
+    """
+    Load parameters from all .cfg files in the folder and save them into a global variable.
+    """
+    global global_cfg_params
+    if global_cfg_params is not None:
+        return  # If already loaded, return directly
+
+    global_cfg_params = set()
+
+    # Traverse all .cfg files in the folder
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".cfg"):
+            cfg_file_path = os.path.join(folder_path, filename)
+            with open(cfg_file_path, "r") as file:
+                # Skip the header line
+                next(file)
+                for line in file:
+                    # Parse each line
+                    parts = line.strip().split(",")
+                    if len(parts) < 10:
+                        continue  # Skip lines with incorrect format
+
+                    # Extract parameters and save them into the global variable
+                    params = (
+                        int(parts[6]),  # D (out_c)
+                        int(parts[3]),  # Ho (output_h)
+                        int(parts[4]),  # Wo (output_w)
+                    )
+                    global_cfg_params.add(params)
+
+
+def check_params_in_global(out_c, output_h, output_w):
+    """
+    Check if the input parameters exist in the global variable.
+    """
+    global global_cfg_params
+    if global_cfg_params is None:
+        raise ValueError("Global parameters not loaded. Call `load_cfg_params` first.")
+
+    # Check if the input parameters match any entry in the global set
+    return (
+        out_c,
+        output_h,
+        output_w,
+    ) in global_cfg_params
+
+
+def constraint_null(**kwargs):
+    return True
+
+
+def constraint_real_conv_params(**kwargs):
+    """
+    Check if the input parameters match any real convolution layer in the .cfg files.
+    """
+
+    load_cfg_params(cfg_folder_path)  # Load parameters from .cfg files
+
+    # Extract input parameters
+    out_c = kwargs["shape_detail_C"]
+    output_h = kwargs["shape_detail_H"]
+    output_w = kwargs["shape_detail_W"]
+
+    # Check if the parameters exist in the global variable
+    return check_params_in_global(out_c, output_h, output_w)
+
+
 def gen_form_detail_dim():
     return [None, 0, 1, 2, 3]
 
@@ -188,6 +317,11 @@ def gen_num_warps():
 shapegen = ShapeGenerator(
     excel_config,
     (gen_shape_detail_N, gen_shape_detail_C, gen_shape_detail_H, gen_shape_detail_W),
+    [
+        constraint_real_conv_params
+        if pytest_constraint_real_conv_params
+        else constraint_null,
+    ],
     form_generators=[gen_form_detail_dim],
 )
 configgen = ConfigGenerator(
@@ -196,7 +330,9 @@ configgen = ConfigGenerator(
 )
 
 shape_config_combinations = list(
-    itertools.product(shapegen.generate(), configgen.generate())
+    itertools.product(shapegen.generate_custom(custom_generator), configgen.generate())
+    if pytest_custom_generator
+    else itertools.product(shapegen.generate(), configgen.generate())
 )
 
 

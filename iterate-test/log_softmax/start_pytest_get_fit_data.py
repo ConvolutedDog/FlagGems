@@ -193,7 +193,7 @@ def read_params_from_cfg(folder_path):
                     input_c = int(parts[5])  # C
 
                     for batch in [1, 4, 8, 16, 32]:
-                        for dim in [None, 0, 1, 2, 3]:
+                        for dim in [None, 1, 2, 3]:
                             shapes.append(
                                 {
                                     "shape_detail_N": batch,
