@@ -168,7 +168,7 @@ def read_params_from_cfg(folder_path):
 
     # Reverse all the *.cfg files in `folder_path`.
     for filename in os.listdir(folder_path):
-        if filename.endswith(".cfg"):
+        if filename.endswith("alexnet.cfg"):
             cfg_file_path = os.path.join(folder_path, filename)
             with open(cfg_file_path, "r") as file:
                 # Skip the header of *.cfg.
@@ -186,7 +186,14 @@ def read_params_from_cfg(folder_path):
 
                     for batch in [1, 4, 8, 16, 32]:
                         # diagonal: -(M-2) ~ (N-1)
-                        for diagonal in list(range(-(input_h - 2), input_w - 1)):
+                        # print(input_h)
+                        for diagonal in list(
+                            range(
+                                -(input_h - 2),
+                                input_w - 1,
+                                int((input_h + input_w + 2) / 4),
+                            )
+                        ):
                             shapes.append(
                                 {
                                     "shape_detail_N": batch,
@@ -227,7 +234,7 @@ def load_cfg_params(folder_path):
 
     # Traverse all .cfg files in the folder
     for filename in os.listdir(folder_path):
-        if filename.endswith(".cfg"):
+        if filename.endswith("alexnet.cfg"):
             cfg_file_path = os.path.join(folder_path, filename)
             with open(cfg_file_path, "r") as file:
                 # Skip the header line

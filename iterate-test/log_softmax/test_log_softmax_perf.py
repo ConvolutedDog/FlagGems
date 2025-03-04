@@ -100,7 +100,11 @@ def log_softmax_input_fn(shape, cur_dtype, device):
     ) = shape
     shape = shape_detail_N, shape_detail_C, shape_detail_H, shape_detail_W
     inp = torch.randn(shape, dtype=cur_dtype, device=device)
-    yield inp, form_detail_dim
+    # yield inp, form_detail_dim,
+    yield {
+        "input": inp,
+        "dim": form_detail_dim,
+    },
     # if inp.ndim == 4:
     #     yield inp,
     #     yield inp, 0
